@@ -48,6 +48,8 @@ extern "C"
         SECURE_STORAGE_OK, \
         SECURE_STORAGE_ERROR
 
+    // Missing how to instantiate the TPM code - See xio (From Dan)
+
     DEFINE_ENUM(DEVICE_AUTHENTICATOR_RESULT, DEVICE_AUTHENTICATOR_RESULT_VALUES);
 
     MOCKABLE_FUNCTION(, DEVICE_AUTHENTICATOR_HANDLE, DeviceAuthenticator_Create, const char*, deviceId);
@@ -58,9 +60,8 @@ extern "C"
 
     MOCKABLE_FUNCTION(, STRING_HANDLE, DeviceAuthenticator_GenerateSASToken, DEVICE_AUTHENTICATOR_HANDLE, deviceAuthenticatorHandle, size_t, expiry);
 
-    MOCKABLE_FUNCTION(, STRING_HANDLE, DeviceAuthenticator_GetX509PrivateKey, DEVICE_AUTHENTICATOR_HANDLE, deviceAuthenticatorHandle);
-
-    MOCKABLE_FUNCTION(, AUTHENTICATION_HANDLE, DeviceAuthenticator_GetClientAuthencication, DEVICE_AUTHENTICATOR_HANDLE, deviceAuthenticatorHandle);
+    //MOCKABLE_FUNCTION(, STRING_HANDLE, DeviceAuthenticator_GetX509PrivateKey, DEVICE_AUTHENTICATOR_HANDLE, deviceAuthenticatorHandle);
+    // TODO: No X509 for now - 
 
 #ifdef __cplusplus
 }
