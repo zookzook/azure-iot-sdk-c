@@ -11,12 +11,13 @@
 
 static XIO_HANDLE getTLSIOTransport(const char* fqdn)
 {
+	const IO_INTERFACE_DESCRIPTION* io_interface_description;
     XIO_HANDLE result;
     TLSIO_CONFIG tls_io_config;
     tls_io_config.hostname = fqdn;
     tls_io_config.port = DEFAULT_IOTHUB_AMQP_PORT;
     // Codes_SRS_IOTHUBTRANSPORTAMQP_09_002: [getTLSIOTransport shall get `io_interface_description` using platform_get_default_tlsio())]
-    const IO_INTERFACE_DESCRIPTION* io_interface_description = platform_get_default_tlsio();
+    io_interface_description = platform_get_default_tlsio();
 
     // Codes_SRS_IOTHUBTRANSPORTAMQP_09_003: [If `io_interface_description` is NULL getTLSIOTransport shall return NULL.]
     // Codes_SRS_IOTHUBTRANSPORTAMQP_09_004: [getTLSIOTransport shall return the XIO_HANDLE created using xio_create().]

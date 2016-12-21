@@ -425,8 +425,8 @@ static void destroyConnection(AMQP_TRANSPORT_INSTANCE* transport_state)
 
 static void on_amqp_management_state_changed(void* context, AMQP_MANAGEMENT_STATE new_amqp_management_state, AMQP_MANAGEMENT_STATE previous_amqp_management_state)
 {
-    (void)previous_amqp_management_state;
     AMQP_TRANSPORT_INSTANCE* transport_state = (AMQP_TRANSPORT_INSTANCE*)context;
+    (void)previous_amqp_management_state;
 
     if (transport_state != NULL)
     {
@@ -984,10 +984,9 @@ static int sendPendingEvents(AMQP_TRANSPORT_DEVICE_STATE* device_state)
 
     while ((message = getNextEventToSend(device_state)) != NULL)
     {
-        result = __LINE__;
-
         MESSAGE_HANDLE amqp_message = NULL;
         bool is_message_error = false;
+        result = __LINE__;
 
         // Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_086: [IoTHubTransport_AMQP_Common_DoWork shall move queued events to an "in-progress" list right before processing them for sending]
         trackEventInProgress(message, device_state);
@@ -1040,7 +1039,7 @@ static void prepareDeviceForConnectionRetry(AMQP_TRANSPORT_DEVICE_STATE* device_
 {
     if (authentication_reset(device_state->authentication) != RESULT_OK)
     {
-        LogError("Failed resetting the authenticatication state of device %s", device_state->deviceId);
+        LogError("Failed resetting the authenticatication state of device %s", STRING_c_str(device_state->deviceId));
     }
 
 #ifdef WIP_C2D_METHODS_AMQP /* This feature is WIP, do not use yet */
@@ -1056,8 +1055,9 @@ static void prepareDeviceForConnectionRetry(AMQP_TRANSPORT_DEVICE_STATE* device_
 static void prepareForConnectionRetry(AMQP_TRANSPORT_INSTANCE* transport_state)
 {
     size_t number_of_registered_devices = VECTOR_size(transport_state->registered_devices);
+	size_t i;
 
-    for (size_t i = 0; i < number_of_registered_devices; i++)
+    for (i = 0; i < number_of_registered_devices; i++)
     {
         AMQP_TRANSPORT_DEVICE_STATE* device_state = *(AMQP_TRANSPORT_DEVICE_STATE**)VECTOR_element(transport_state->registered_devices, i);
 
@@ -1323,8 +1323,10 @@ void IoTHubTransport_AMQP_Common_DoWork(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIEN
             }
             else
             {
+				size_t i;
+
                 // Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_241: [IoTHubTransport_AMQP_Common_DoWork shall iterate through all its registered devices to process authentication, events to be sent, messages to be received]
-                for (size_t i = 0; i < number_of_registered_devices; i++)
+                for (i = 0; i < number_of_registered_devices; i++)
                 {
                     AMQP_TRANSPORT_DEVICE_STATE* device_state = *(AMQP_TRANSPORT_DEVICE_STATE**)VECTOR_element(transport_state->registered_devices, i);
 
@@ -1388,9 +1390,9 @@ void IoTHubTransport_AMQP_Common_Unsubscribe(IOTHUB_DEVICE_HANDLE handle)
 
 int IoTHubTransport_AMQP_Common_Subscribe_DeviceTwin(IOTHUB_DEVICE_HANDLE handle)
 {
-    (void)handle;
     /*Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_02_009: [ IoTHubTransport_AMQP_Common_Subscribe_DeviceTwin shall return a non-zero value. ]*/
     int result = __LINE__;
+    (void)handle;
     LogError("IoTHubTransport_AMQP_Common_Subscribe_DeviceTwin Not supported");
     return result;
 }
@@ -1456,13 +1458,14 @@ void IoTHubTransport_AMQP_Common_Unsubscribe_DeviceMethod(IOTHUB_DEVICE_HANDLE h
 
 int IoTHubTransport_AMQP_Common_DeviceMethod_Response(IOTHUB_DEVICE_HANDLE handle, METHOD_HANDLE methodId, const unsigned char* response, size_t response_size, int status_response)
 {
+    int result;
+    AMQP_TRANSPORT_DEVICE_STATE* device_state = (AMQP_TRANSPORT_DEVICE_STATE*)handle;
     (void)response;
     (void)response_size;
     (void)status_response;
     (void)methodId;
-    int result;
-    AMQP_TRANSPORT_DEVICE_STATE* device_state = (AMQP_TRANSPORT_DEVICE_STATE*)handle;
-    if (device_state != NULL)
+
+	if (device_state != NULL)
     {
 #ifdef WIP_C2D_METHODS_AMQP /* This feature is WIP, do not use yet */
         IOTHUBTRANSPORT_AMQP_METHOD_HANDLE saved_handle = (IOTHUBTRANSPORT_AMQP_METHOD_HANDLE)methodId;
@@ -1916,10 +1919,10 @@ void IoTHubTransport_AMQP_Common_Destroy(TRANSPORT_LL_HANDLE handle)
     if (handle != NULL)
     {
         AMQP_TRANSPORT_INSTANCE* transport_state = (AMQP_TRANSPORT_INSTANCE*)handle;
-
         size_t numberOfRegisteredDevices = VECTOR_size(transport_state->registered_devices);
+		size_t i;
 
-        for (size_t i = 0; i < numberOfRegisteredDevices; i++)
+        for (i = 0; i < numberOfRegisteredDevices; i++)
         {
             // Codes_SRS_IOTHUBTRANSPORT_AMQP_COMMON_09_209: [IoTHubTransport_AMQP_Common_Destroy shall invoke IoTHubTransport_AMQP_Common_Unregister on each of its registered devices.]
             IoTHubTransport_AMQP_Common_Unregister(*(AMQP_TRANSPORT_DEVICE_STATE**)VECTOR_element(transport_state->registered_devices, i));

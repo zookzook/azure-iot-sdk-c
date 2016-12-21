@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "azure_c_shared_utility/agenttime.h"
 #include "azure_c_shared_utility/platform.h"
 #include "azure_c_shared_utility/threadapi.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
-#include "iothub_client.h"
+#include "iothub_client_ll.h"
 #include "iothub_message.h"
 #include "iothubtransportamqp.h"
 
@@ -18,7 +19,7 @@
 /*String containing Hostname, Device Id & Device Key in the format:                         */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"                */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessSignature=<device_sas_token>"    */
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "HostName=iothub-client-02.azure-devices.net;DeviceId=test_device;SharedAccessKey=I6Zh2pWn0W0EiON+P9dyf+nYcJMNhILAzDwm2MxzWBM=";
 
 static int callbackCounter;
 static bool g_continueRunning;
@@ -41,6 +42,8 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
     size_t size = 0;
     const char* messageId;
     const char* correlationId;
+	IOTHUBMESSAGE_CONTENT_TYPE contentType;
+	MAP_HANDLE mapProperties;
 
     // AMQP message properties
     if ((messageId = IoTHubMessage_GetMessageId(message)) == NULL)
@@ -54,7 +57,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
     }
 
     // AMQP message content.
-    IOTHUBMESSAGE_CONTENT_TYPE contentType = IoTHubMessage_GetContentType(message);
+    contentType = IoTHubMessage_GetContentType(message);
 
     if (contentType == IOTHUBMESSAGE_BYTEARRAY)
     {
@@ -86,7 +89,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
     }
 
     // Retrieve properties from the message
-    MAP_HANDLE mapProperties = IoTHubMessage_Properties(message);
+    mapProperties = IoTHubMessage_Properties(message);
     if (mapProperties != NULL)
     {
         const char*const* keys;
@@ -121,7 +124,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
 static void SendConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, void* userContextCallback)
 {
     EVENT_INSTANCE* eventInstance = (EVENT_INSTANCE*)userContextCallback;
-    (void)printf("Confirmation[%d] received for message tracking id = %zu with result = %s\r\n", callbackCounter, eventInstance->messageTrackingId, ENUM_TO_STRING(IOTHUB_CLIENT_CONFIRMATION_RESULT, result));
+    (void)printf("Confirmation[%d] received for message tracking id = %u with result = %s\r\n", callbackCounter, (unsigned int)eventInstance->messageTrackingId, ENUM_TO_STRING(IOTHUB_CLIENT_CONFIRMATION_RESULT, result));
     /* Some device specific action code goes here... */
     callbackCounter++;
     IoTHubMessage_Destroy(eventInstance->messageHandle);
@@ -130,15 +133,16 @@ static void SendConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, v
 void iothub_client_sample_amqp_run(void)
 {
     IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
-
     EVENT_INSTANCE messages[MESSAGE_COUNT];
+	double avgWindSpeed;
+	int receiveContext;
 
     g_continueRunning = true;
-    srand((unsigned int)time(NULL));
-    double avgWindSpeed = 10.0;
+    srand((unsigned int)get_time(NULL));
+    avgWindSpeed = 10.0;
 
     callbackCounter = 0;
-    int receiveContext = 0;
+    receiveContext = 0;
 
     (void)printf("Starting the IoTHub client sample AMQP...\r\n");
 
@@ -172,10 +176,13 @@ void iothub_client_sample_amqp_run(void)
             }
             else
             {
+				size_t iterator;
+				size_t index;
+
                 (void)printf("IoTHubClient_SetMessageCallback...successful.\r\n");
 
                 /* Now that we are ready to receive commands, let's send some messages */
-                size_t iterator = 0;
+                iterator = 0;
                 do
                 {
                     if (iterator < MESSAGE_COUNT)
@@ -187,10 +194,12 @@ void iothub_client_sample_amqp_run(void)
                         }
                         else
                         {
+							MAP_HANDLE propMap;
+
                             messages[iterator].messageTrackingId = iterator;
 
-                            MAP_HANDLE propMap = IoTHubMessage_Properties(messages[iterator].messageHandle);
-                            (void)sprintf_s(propText, sizeof(propText), "PropMsg_%zu", iterator);
+                            propMap = IoTHubMessage_Properties(messages[iterator].messageHandle);
+                            (void)sprintf_s(propText, sizeof(propText), "PropMsg_%u", iterator);
                             if (Map_AddOrUpdate(propMap, "PropName", propText) != MAP_OK)
                             {
                                 (void)printf("ERROR: Map_AddOrUpdate Failed!\r\n");
@@ -213,7 +222,7 @@ void iothub_client_sample_amqp_run(void)
                 } while (g_continueRunning);
 
                 (void)printf("iothub_client_sample_mqtt has gotten quit message, call DoWork %d more time to complete final sending...\r\n", DOWORK_LOOP_NUM);
-                for (size_t index = 0; index < DOWORK_LOOP_NUM; index++)
+                for (index = 0; index < DOWORK_LOOP_NUM; index++)
                 {
                     IoTHubClient_LL_DoWork(iotHubClientHandle);
                     ThreadAPI_Sleep(1);

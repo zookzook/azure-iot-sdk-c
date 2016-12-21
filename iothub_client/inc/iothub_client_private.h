@@ -4,8 +4,6 @@
 #ifndef IOTHUB_CLIENT_PRIVATE_H
 #define IOTHUB_CLIENT_PRIVATE_H
 
-#include <signal.h>
-
 #include "azure_c_shared_utility/constbuffer.h"
 #include "azure_c_shared_utility/crt_abstractions.h"
 #include "azure_c_shared_utility/doublylinkedlist.h"
