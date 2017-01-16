@@ -18,6 +18,7 @@ and removing calls to _DoWork will yield the same results. */
 #include "iothub_client_ll.h"
 #include "iothub_message.h"
 #include "iothubtransporthttp.h"
+#include "azure_c_shared_utility/shared_util_options.h"
 #endif
 
 #ifdef MBED_BUILD_TIMESTAMP
@@ -132,6 +133,21 @@ void iothub_client_sample_http_run(void)
         else
         {
             unsigned int timeout = 241000;
+
+            /* These settings pertain to HTTP proxy setup, which can work for example with httpapi_compact (see the use_builtin_httpapi cmake option) */
+            /*
+            HTTP_PROXY_OPTIONS proxy_options;
+
+            proxy_options.host_address = "localhost";
+            proxy_options.port = 8888;
+            proxy_options.username = "test";
+            proxy_options.password = "dummy";
+
+            if (IoTHubClient_LL_SetOption(iotHubClientHandle, "proxy_data", &proxy_options) != IOTHUB_CLIENT_OK)
+            {
+                printf("failure to set option \"timeout\"\r\n");
+            }*/
+
             // Because it can poll "after 9 seconds" polls will happen effectively // at ~10 seconds.
             // Note that for scalabilty, the default value of minimumPollingTime
             // is 25 minutes. For more information, see:

@@ -32,6 +32,14 @@ include_directories(.)
 
 add_executable(iothub_client_sample_http ${iothub_client_sample_http_c_files} ${iothub_client_sample_http_h_files})
 
+if(${use_openssl})
+	target_link_libraries(iothub_client_sample_http
+		$ENV{OpenSSLDir}/lib/ssleay32.lib $ENV{OpenSSLDir}/lib/libeay32.lib)
+	
+	file(COPY $ENV{OpenSSLDir}/bin/libeay32.dll DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/Debug)
+	file(COPY $ENV{OpenSSLDir}/bin/ssleay32.dll DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/Debug)
+endif()
+
 target_link_libraries(iothub_client_sample_http 
 #iothubclient is here only because locking... in gballoc no less.
 	iothub_client

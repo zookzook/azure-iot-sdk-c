@@ -48,7 +48,7 @@ option(dont_use_uploadtoblob "set dont_use_uploadtoblob to ON if the functionali
 option(no_logging "disable logging" OFF)
 option(use_installed_dependencies "set use_installed_dependencies to ON to use installed packages instead of building dependencies from submodules" OFF)
 option(use_firmware_update "build the Raspberry PI firmware_update sample" OFF)
-option(build_as_dynamic "build the IoT SDK libaries as dynamic"  OFF)
+option(use_builtin_httpapi "set use_builtin_httpapi to ON to use the built-in httpapi_compact that comes with C shared utility (default is OFF)" OFF)
 
 #Work in progress features
 #=========================
