@@ -1,0 +1,50 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 25
+    buildToolsVersion "25.0.2"
+    defaultConfig {
+        applicationId "com.microsoft.azureiot.clientsample"
+        minSdkVersion 21
+        targetSdkVersion 25
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters 'x86', 'x86_64', 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'mips', 'mips64'
+         //   abiFilters 'armeabi-v7a'
+        }
+        externalNativeBuild {
+            cmake {
+                //               cppFlags ""
+                arguments "-Dskip_samples=ON", "-Duse_default_uuid=ON",
+                        "-DANDROID_TOOLCHAIN=clang", '-DANDROID_PLATFORM=android-21',
+                    //    "-DOPENSSL_INCLUDE_DIR=../../../../../curl-android-ios/openssl/include"
+                "-DOPENSSL_INCLUDE_DIR=/Users/james/projects/Microsoft/curl-android-ios/openssl/include",
+                "-DCURL_INCLUDE_DIRS=/Users/james/projects/Microsoft/curl-android-ios/curl/include",
+                "-DOPENSSL_LIB_DIR=/Users/james/projects/Microsoft/curl-android-ios/opensslroot/lib",
+                "-DCURL_LIB_DIR=/Users/james/projects/Microsoft/curl-android-ios/opensslroot/lib"
+          //
+                        //      "-DOPENSSL_ROOT_DIR=/Users/james/projects/Microsoft/curl-android-ios/opensslroot",
+           //             "-DOPENSSL_ROOT_DIR=/Users/james/projects/Microsoft/openssl/include",
+            //            "-DOPENSSL_USE_STATIC_LIBS=TRUE"
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'com.android.support:appcompat-v7:25.1.1'
+}
