@@ -18,13 +18,13 @@
 /*String containing Hostname, Device Id & Device Key in the format:                         */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"                */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessSignature=<device_sas_token>"    */
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "HostName=mqtt-tls-test.private.azure-devices-int.net;DeviceId=testDevice;SharedAccessKey=Ydmbjj0cQDL7Fnrv+8O3zRK/KbExQuYL6wGtv7zPLBM=";
 
 static int callbackCounter;
 static bool g_continueRunning;
 static char msgText[1024];
 static char propText[1024];
-#define MESSAGE_COUNT       5
+#define MESSAGE_COUNT       5000
 #define DOWORK_LOOP_NUM     3
 
 
@@ -42,7 +42,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
     const char* messageId;
     const char* correlationId;
 
-    // Message properties
+    // AMQP message properties
     if ((messageId = IoTHubMessage_GetMessageId(message)) == NULL)
     {
         messageId = "<null>";
@@ -53,14 +53,14 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
         correlationId = "<null>";
     }
 
-    // Message content
+    // AMQP message content.
     IOTHUBMESSAGE_CONTENT_TYPE contentType = IoTHubMessage_GetContentType(message);
 
     if (contentType == IOTHUBMESSAGE_BYTEARRAY)
     {
         if (IoTHubMessage_GetByteArray(message, &buffer, &size) == IOTHUB_MESSAGE_OK)
         {
-            (void)printf("Received Message [%d]\r\n Message ID: %s\r\n Correlation ID: %s\r\n BINARY Data: <<<%.*s>>> & Size=%d\r\n", *counter, messageId, correlationId, (int)size, buffer, (int)size);
+            (void)printf("Received Message [%d] (message-id: %s, correlation-id: %s) with BINARY Data: <<<%.*s>>> & Size=%d\r\n", *counter, messageId, correlationId,(int)size, buffer, (int)size);
         }
         else
         {
@@ -71,7 +71,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
     {
         if ((buffer = (const unsigned char*)IoTHubMessage_GetString(message)) != NULL && (size = strlen((const char*)buffer)) > 0)
         {
-            (void)printf("Received Message [%d]\r\n Message ID: %s\r\n Correlation ID: %s\r\n STRING Data: <<<%.*s>>> & Size=%d\r\n", *counter, messageId, correlationId, (int)size, buffer, (int)size);
+            (void)printf("Received Message [%d] (message-id: %s, correlation-id: %s) with STRING Data: <<<%.*s>>> & Size=%d\r\n", *counter, messageId, correlationId, (int)size, buffer, (int)size);
 
             // If we receive the work 'quit' then we stop running
         }
@@ -98,7 +98,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
             {
                 size_t index;
 
-                printf(" Message Properties:\r\n");
+                printf("Message Properties:\r\n");
                 for (index = 0; index < propertyCount; index++)
                 {
                     printf("\tKey: %s Value: %s\r\n", keys[index], values[index]);
@@ -178,25 +178,26 @@ void iothub_client_sample_amqp_run(void)
                 size_t iterator = 0;
                 do
                 {
-                    if (iterator < MESSAGE_COUNT)
+                    if(iterator%1000 == 0)
                     {
-                        sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"myFirstDevice\",\"windSpeed\":%.2f}", avgWindSpeed + (rand() % 4 + 2));
-                        if ((messages[iterator].messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
+			size_t it = iterator%1000;
+                        sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"myFirstDevice\",\"windSpeed\":%zu}", it);
+                        if ((messages[it].messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
                         {
                             (void)printf("ERROR: iotHubMessageHandle is NULL!\r\n");
                         }
                         else
                         {
-                            messages[iterator].messageTrackingId = iterator;
+                            messages[it].messageTrackingId = it;
 
-                            MAP_HANDLE propMap = IoTHubMessage_Properties(messages[iterator].messageHandle);
-                            (void)sprintf_s(propText, sizeof(propText), "PropMsg_%zu", iterator);
+                            MAP_HANDLE propMap = IoTHubMessage_Properties(messages[it].messageHandle);
+                            (void)sprintf_s(propText, sizeof(propText), "PropMsg_%zu", it);
                             if (Map_AddOrUpdate(propMap, "PropName", propText) != MAP_OK)
                             {
                                 (void)printf("ERROR: Map_AddOrUpdate Failed!\r\n");
                             }
 
-                            if (IoTHubClient_LL_SendEventAsync(iotHubClientHandle, messages[iterator].messageHandle, SendConfirmationCallback, &messages[iterator]) != IOTHUB_CLIENT_OK)
+                            if (IoTHubClient_LL_SendEventAsync(iotHubClientHandle, messages[it].messageHandle, SendConfirmationCallback, &messages[it]) != IOTHUB_CLIENT_OK)
                             {
                                 (void)printf("ERROR: IoTHubClient_SendEventAsync..........FAILED!\r\n");
                             }
@@ -210,7 +211,7 @@ void iothub_client_sample_amqp_run(void)
                     ThreadAPI_Sleep(1);
 
                     iterator++;
-                } while (g_continueRunning);
+                } while (1);
 
                 (void)printf("iothub_client_sample_amqp has gotten quit message, call DoWork %d more time to complete final sending...\r\n", DOWORK_LOOP_NUM);
                 for (size_t index = 0; index < DOWORK_LOOP_NUM; index++)
