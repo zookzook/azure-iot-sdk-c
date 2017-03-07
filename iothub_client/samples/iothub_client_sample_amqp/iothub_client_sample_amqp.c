@@ -135,7 +135,6 @@ void iothub_client_sample_amqp_run(void)
 
     g_continueRunning = true;
     srand((unsigned int)time(NULL));
-    double avgWindSpeed = 10.0;
 
     callbackCounter = 0;
     int receiveContext = 0;
