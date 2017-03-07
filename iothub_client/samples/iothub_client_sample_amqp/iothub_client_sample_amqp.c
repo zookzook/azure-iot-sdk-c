@@ -211,7 +211,7 @@ void iothub_client_sample_amqp_run(void)
                     ThreadAPI_Sleep(1);
 
                     iterator++;
-                } while (1);
+                } while (g_continueRunning);
 
                 (void)printf("iothub_client_sample_amqp has gotten quit message, call DoWork %d more time to complete final sending...\r\n", DOWORK_LOOP_NUM);
                 for (size_t index = 0; index < DOWORK_LOOP_NUM; index++)
