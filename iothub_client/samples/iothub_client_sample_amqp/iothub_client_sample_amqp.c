@@ -180,7 +180,7 @@ void iothub_client_sample_amqp_run(void)
                 {
                     if(iterator%1000 == 0)
                     {
-			size_t it = iterator%1000;
+			size_t it = iterator/1000;
                         sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"myFirstDevice\",\"windSpeed\":%zu}", it);
                         if ((messages[it].messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
                         {
