@@ -12,7 +12,7 @@
 #include "iothubtransportamqp_websockets.h"
 #include "../../../certs/certs.h"
 
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "HostName=fault-inject.private.azure-devices-int.net;DeviceId=anpo0001;SharedAccessKey=Ca4nuafd1xmiV/Z7DNqc+eRHygY6Rhiqr/LZeNgGIJA=";
 static int callbackCounter;
 
 
@@ -138,6 +138,8 @@ void iothub_client_sample_amqp_websockets_run(void)
     }
     else
     {
+        bool t = true;
+        IoTHubClient_SetOption(iotHubClientHandle, "logtrace", &t);
         // For mbed add the certificate information
         if (IoTHubClient_SetOption(iotHubClientHandle, "TrustedCerts", certificates) != IOTHUB_CLIENT_OK)
         {
