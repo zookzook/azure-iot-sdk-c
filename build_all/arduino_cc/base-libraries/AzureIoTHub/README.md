@@ -2,9 +2,10 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 
 # AzureIoTHub - Azure IoT Hub library for Arduino
 
-This library is a port of the [Microsoft Azure IoT device SDK for C](https://github.com/Azure/azure-iot-sdks/blob/master/c/readme.md) to Arduino. It allows you to use several Arduino compatible boards with Azure IoT Hub. Please submit any contribution directly to [azure-iot-sdks](https://github.com/Azure/azure-iot-sdks).
+This library is a port of the [Microsoft Azure IoT device SDK for C](https://github.com/Azure/azure-iot-sdks/blob/master/c/readme.md) to Arduino. It allows you to use several Arduino compatible boards with Azure IoT Hub.
 
-Currently supported hardware:
+
+## Currently supported hardware
 - Atmel SAMD Based boards
   - Arduino/Genuino [MKR1000](https://www.arduino.cc/en/Main/ArduinoMKR1000)
   - Arduino/Genuino [Zero](https://www.arduino.cc/en/Main/ArduinoBoardZero) and [WiFi Shield 101](https://www.arduino.cc/en/Main/ArduinoWiFiShield101)
@@ -21,11 +22,11 @@ You should have the following ready before beginning with any board:
 -   [Arduino IDE 1.6.12](https://www.arduino.cc/en/Main/Software)
 -   Install the `AzureIoTHub` library via the Arduino IDE Library Manager
 -   Install the `AzureIoTUtility` library via the Arduino IDE Library Manager
--   Install the `AzureIoTProtocol_MQTT` library via the Arduino IDE Library Manager
+-   Install the `AzureIoTProtocol_HTTP` library via the Arduino IDE Library Manager
 
-# Simple Sample Instructions
+## Simple Sample Instructions
 
-## MKR1000 or Zero + Wifi101
+### MKR1000 or Zero + Wifi101
 1. Open the `simplesample_http` example from the Arduino IDE File->Examples->AzureIoTHub menu.
 2. Install the `WiFi101` library from the Arduino IDE Library Manager.
 3. Install the `NTPClient` library from the Arduino IDE Library Manager.
@@ -34,7 +35,7 @@ You should have the following ready before beginning with any board:
     * Ensure you are using a wifi network that does not require additional manual steps after connection, such as opening a web browser.
 6. Update IoT Hub Connection string in simplesample_http.c
 
-## ESP8266
+### ESP8266
 ##### Sparkfun Thing, Adafruit Feather Huzzah, or generic ESP8266 board
 
 1. Install esp8266 board support into your Arduino IDE.
@@ -52,7 +53,7 @@ You should have the following ready before beginning with any board:
 7. Access the [Huzzah Get Started](https://azure.microsoft.com/en-us/documentation/samples/iot-hub-c-huzzah-getstartedkit/) tutorial to learn more about Microsoft Huzzah Dev Kit.
 
 
-## Adafruit Feather M0
+### Adafruit Feather M0
 1. Install Feather M0 board support into your Arduino IDE.
     * Start Arduino and open Preferences window.
     * Enter `https://adafruit.github.io/arduino-board-index/package_adafruit_index.json` into Additional Board Manager URLs field. You can add multiple URLs, separating them with commas.
@@ -67,6 +68,39 @@ You should have the following ready before beginning with any board:
     * Ensure you are using a wifi network that does not require additional manual steps after connection, such as opening a web browser.
 8. Update IoT Hub Connection string in simplesample_http.c
 9. Access the [Feather M0 WiFi Get Started](https://azure.microsoft.com/en-us/documentation/samples/iot-hub-c-m0wifi-getstartedkit/) tutorial to learn more about Microsoft Feather M0 WiFi Dev Kit.
+
+## Contributors
+
+You are in the right place to contribute Arduino-specific changes to the Azure C SDK.
+
+### Please consider all Arduino libraries for your contribution
+
+There are several Arduino-specific library sections, and if you make a change in an Arduino-specific file such as `travis.yml` or a `.ino` file, it would likely help others if you add your contribution to the corresponding file in all of the locations:
+
+*  [azure-iot-sdk-c\build_all\arduino_cc\base-libraries\AzureIoTHub](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/AzureIoTHub)
+*  [azure-iot-sdk-c\build_all\arduino_cc\base-libraries\AzureIoTProtocol_HTTP](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/AzureIoTProtocol_HTTP)
+*  [azure-iot-sdk-c\build_all\arduino_cc\base-libraries\AzureIoTProtocol_MQTT](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/AzureIoTProtocol_MQTT)
+*  [azure-iot-sdk-c\build_all\arduino_cc\base-libraries\AzureIoTUtility](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/AzureIoTUtility)
+
+### Contributing to the `readme.md` files
+
+The `readme.md` files for the various Arduino libraries are almost identical, so to avoid duplication and versioning problems, the SDK publication process assembles the readme files from sources [here](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator).
+
+#### Step one: Change the readme source files:
+
+*  [AzureIoTHub title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_hub_fragment.md)
+*  [AzureIoTProtocol_HTTP title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_http_fragment.md)
+*  [AzureIoTProtocol_MQTT title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_mqtt_fragment.md)
+*  [AzureIoTUtility title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_utility_fragment.md)
+*  [Supported devices, prerequisites, and samples instructions](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_utility_fragment.md)
+
+#### Step two: Run the readme build script
+
+Run the `build_readmes.ps1` with the current directory at its own location. This will generate and place individual `readme.md` files where they belong in each Arduino library source tree. It will also generate similar `readme.md` files within a `built_readmes` directory; these can be ignored, and may be safely deleted.
+
+#### Step three: Pull
+
+Check in your readme source changes and the `readme.md` files put into the library directories by `build_readmes.ps1`, then do your pull request as usual.
 
 ## License
 
