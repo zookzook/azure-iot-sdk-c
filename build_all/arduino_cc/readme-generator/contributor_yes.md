@@ -14,20 +14,4 @@ There are several Arduino-specific library sections, and if you make a change in
 
 ### Contributing to the `readme.md` files
 
-The `readme.md` files for the various Arduino libraries are almost identical, so to avoid duplication and versioning problems, the SDK publication process assembles the readme files from sources [here](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator).
-
-#### Step one: Change the readme source files:
-
-*  [AzureIoTHub title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_hub_fragment.md)
-*  [AzureIoTProtocol_HTTP title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_http_fragment.md)
-*  [AzureIoTProtocol_MQTT title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_mqtt_fragment.md)
-*  [AzureIoTUtility title and intro](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_utility_fragment.md)
-*  [Supported devices, prerequisites, and samples instructions](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/title_utility_fragment.md)
-
-#### Step two: Run the readme build script
-
-Run the `build_readmes.ps1` with the current directory at its own location. This will generate and place individual `readme.md` files where they belong in each Arduino library source tree. It will also generate similar `readme.md` files within a `built_readmes` directory; these can be ignored, and may be safely deleted.
-
-#### Step three: Pull
-
-Check in your readme source changes and the `readme.md` files put into the library directories by `build_readmes.ps1`, then do your pull request as usual.
+Like the AzureIoT Arduino libraries themselves, the library `readme.md` files are assembled from sources and cannot be modified directly. The directions and the sources for modifying the library `readme.md` files are to be found [here](https://github.com/Azure/azure-iot-sdk-c/tree/master/build_all/arduino_cc/base-libraries/readme-generator/readme.md).
