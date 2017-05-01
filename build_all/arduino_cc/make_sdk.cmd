@@ -30,6 +30,11 @@ set AzureIoTSDKs_path=%~dp0..\..\
 rem // resolve to fully qualified path
 for %%i in ("%AzureIoTSDKs_path%") do set AzureIoTSDKs_path=%%~fi
 
+rem // Run the readme.md generator
+pushd readme-generator
+PowerShell.exe -ExecutionPolicy Bypass -Command "& './build_readmes.ps1'"
+popd
+
 mkdir %Libraries_path%
 pushd %Libraries_path%
 
@@ -39,6 +44,12 @@ robocopy %~dp0\base-libraries\AzureIoTHub %AzureIoTHub_path% -MIR
 robocopy %~dp0\base-libraries\AzureIoTUtility %AzureIoTUtility_path% -MIR
 robocopy %~dp0\base-libraries\AzureIoTProtocol_HTTP %AzureIoTProtocolHTTP_path% -MIR
 robocopy %~dp0\base-libraries\AzureIoTProtocol_MQTT %AzureIoTProtocolMQTT_path% -MIR
+
+rem // Overwrite the SDK reame.md's with the special Arduino library readme.md's
+robocopy %~dp0\readme-generator\built_readmes\AzureIoTHub %AzureIoTHub_path% readme.md /is /it
+robocopy %~dp0\readme-generator\built_readmes\AzureIoTUtility %AzureIoTUtility_path% readme.md /is /it
+robocopy %~dp0\readme-generator\built_readmes\AzureIoTProtocol_HTTP %AzureIoTProtocolHTTP_path% readme.md /is /it
+robocopy %~dp0\readme-generator\built_readmes\AzureIoTProtocol_MQTT %AzureIoTProtocolMQTT_path% readme.md /is /it
 
 mkdir %sdk_path%
 
