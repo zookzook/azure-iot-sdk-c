@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft. All rights reserved.
+# Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
 md -Force -Name built_readmes
 md -Force -Name built_readmes/AzureIoTHub
 md -Force -Name built_readmes/AzureIoTProtocol_HTTP

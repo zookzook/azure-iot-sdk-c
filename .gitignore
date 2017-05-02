@@ -201,7 +201,9 @@ common/tools/macro_utils_h_generator/macro_utils_h_generator.exe
 .browse.VC.db*
 
 build_all/windows/nuget.exe
+build_all/arduino_cc/readme-generator/built_readmes/
 
 /cmake
 /build
 *.cert
+
