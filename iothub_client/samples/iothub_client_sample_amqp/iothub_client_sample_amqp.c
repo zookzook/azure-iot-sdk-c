@@ -10,6 +10,7 @@
 #include "iothub_client.h"
 #include "iothub_message.h"
 #include "iothubtransportamqp.h"
+#include "iothub_client_options.h"
 
 #ifdef MBED_BUILD_TIMESTAMP
 #include "certs.h"
@@ -18,7 +19,7 @@
 /*String containing Hostname, Device Id & Device Key in the format:                         */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"                */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessSignature=<device_sas_token>"    */
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "HostName=iot-sdks-test.azure-devices.net;DeviceId=ewertons-device1;SharedAccessKey=hT4tkv1auVqMUCZ0HWZFQC0lfuHFf6decNPuc+ZhWCg=";
 
 static int callbackCounter;
 static bool g_continueRunning;
@@ -155,6 +156,13 @@ void iothub_client_sample_amqp_run(void)
         {
             bool traceOn = true;
             IoTHubClient_LL_SetOption(iotHubClientHandle, "logtrace", &traceOn);
+
+            size_t sec1 = 45;
+            size_t sec2 = 45;
+            size_t sec3 = 45;
+            IoTHubClient_LL_SetOption(iotHubClientHandle, OPTION_SAS_TOKEN_LIFETIME, &sec1);
+            IoTHubClient_LL_SetOption(iotHubClientHandle, OPTION_SAS_TOKEN_REFRESH_TIME, &sec2);
+            IoTHubClient_LL_SetOption(iotHubClientHandle, OPTION_CBS_REQUEST_TIMEOUT, &sec3);
 
 #ifdef MBED_BUILD_TIMESTAMP
             // For mbed add the certificate information
