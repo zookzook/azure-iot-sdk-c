@@ -24,7 +24,7 @@
 
 /*String containing Hostname, Device Id & Device Key in the format:             */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"    */
-static const char* connectionString = "[device connection string]";
+static const char* connectionString = "HostName=jspaith-iothub-test.azure-devices.net;DeviceId=myFirstDevice;SharedAccessKey=aaPtJv8egCl/49DPcDjj2u2RCwP0c4iA/nNk0iRhy5M=";
 
 // Define the Model
 BEGIN_NAMESPACE(WeatherStation);
@@ -36,7 +36,8 @@ WITH_DATA(float, Temperature),
 WITH_DATA(float, Humidity),
 WITH_ACTION(TurnFanOn),
 WITH_ACTION(TurnFanOff),
-WITH_ACTION(SetAirResistance, int, Position)
+WITH_ACTION(SetAirResistance, int, Position),
+WITH_ACTION(SetAirResistance2, int, Position1, int, Position2)
 );
 
 END_NAMESPACE(WeatherStation);
@@ -61,6 +62,14 @@ EXECUTE_COMMAND_RESULT SetAirResistance(ContosoAnemometer* device, int Position)
 {
     (void)device;
     (void)printf("Setting Air Resistance Position to %d.\r\n", Position);
+    return EXECUTE_COMMAND_SUCCESS;
+}
+
+EXECUTE_COMMAND_RESULT SetAirResistance2(ContosoAnemometer* device, int Position1, int Position2)
+{
+    (void)device;
+    (void)printf("Setting Air Resistance Position1 to %d.\r\n", Position1);
+    (void)printf("Setting Air Resistance Position2 to %d.\r\n", Position2);
     return EXECUTE_COMMAND_SUCCESS;
 }
 
