@@ -34,7 +34,7 @@ and removing calls to _DoWork will yield the same results. */
 
 /*String containing Hostname, Device Id & Device Key in the format:             */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"    */
-static const char* connectionString = "HostName=...";
+static const char* connectionString = "HostName=jspaith-iothub-test.azure-devices.net;DeviceId=myFirstDevice;SharedAccessKey=aaPtJv8egCl/49DPcDjj2u2RCwP0c4iA/nNk0iRhy5M=";
 
 // Define the Model
 BEGIN_NAMESPACE(WeatherStation);
@@ -44,7 +44,7 @@ WITH_DATA(ascii_char_ptr, DeviceId),
 WITH_DATA(int, WindSpeed),
 WITH_ACTION(TurnFanOn_with_Action),
 WITH_ACTION(TurnFanOff_with_Action),
-WITH_METHOD(TurnFanOn_with_Method),
+WITH_METHOD(TurnFanOn_with_Method, ascii_char_ptr, ptr, ascii_char_ptr, ptr2),
 WITH_METHOD(TurnFanOff_with_Method)
 );
 
@@ -64,10 +64,13 @@ EXECUTE_COMMAND_RESULT TurnFanOff_with_Action(ContosoAnemometer* device)
     return EXECUTE_COMMAND_SUCCESS;
 }
 
-METHODRETURN_HANDLE TurnFanOn_with_Method(ContosoAnemometer* device)
+METHODRETURN_HANDLE TurnFanOn_with_Method(ContosoAnemometer* device, ascii_char_ptr ptr, ascii_char_ptr ptr2)
 {
     (void)device;
+	(void)ptr;
     (void)printf("Turning fan on with Method.\r\n");
+	(void)printf("ptr=<%s>.\r\n", ptr);
+	(void)printf("ptr2=<%s>.\r\n", ptr2);
 
     METHODRETURN_HANDLE result = MethodReturn_Create(1, "{\"Message\":\"Turning fan on with Method\"}");
     return result;
@@ -85,6 +88,9 @@ METHODRETURN_HANDLE TurnFanOff_with_Method(ContosoAnemometer* device)
 static int DeviceMethodCallback(const char* method_name, const unsigned char* payload, size_t size, unsigned char** response, size_t* resp_size, void* userContextCallback)
 {
     int result;
+	// unsigned char newP[] = "{\"ptr\":\"Payload\\/FooBar\"}";
+	// payload = (unsigned char*)newP;
+	// size = 0x19;
 
     /*this is step  3: receive the method and push that payload into serializer (from below)*/
     char* payloadZeroTerminated = (char*)malloc(size + 1);
