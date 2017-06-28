@@ -577,8 +577,8 @@ IOTHUB_ACCOUNT_INFO_HANDLE IoTHubAccount_Init_With_Config(IOTHUB_ACCOUNT_CONFIG*
                     // This is a rather large hack to get around Jenkins putting a space into the certs where the lf character should be.
                     // We replace any spaces in the cert (and private key) proper with lf characters.
                     //
-                    munge(iothub_account_info->x509Certificate, "-----BEGIN CERTIFICATE-----", "-----END CERTIFICATE-----");
-                    munge(iothub_account_info->x509PrivateKey, "-----BEGIN RSA PRIVATE KEY-----", "-----END RSA PRIVATE KEY-----");
+                    // munge(iothub_account_info->x509Certificate, "-----BEGIN CERTIFICATE-----", "-----END CERTIFICATE-----");
+                    // munge(iothub_account_info->x509PrivateKey, "-----BEGIN RSA PRIVATE KEY-----", "-----END RSA PRIVATE KEY-----");
                     if (retrieveConnStringInfo(iothub_account_info) != 0)
                     {
                         LogError("retrieveConnStringInfo failed.\r\n");
