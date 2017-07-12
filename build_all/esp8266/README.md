@@ -53,6 +53,6 @@ The `make` process takes about 7 minutes on a dedicated Ubuntu box.
 
 ##### 6 - Azure C SDK location:
 The above steps need only be done once. When cloning the Azure IoT C SDK, please put it in a directory named
-`workspace/ESP8266:
+`workspace/ESP8266`:
 
 `git clone --recursive https://github.com/Azure/azure-iot-sdk-c.git ESP8266`
