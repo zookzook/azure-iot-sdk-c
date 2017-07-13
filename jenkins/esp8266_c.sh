@@ -4,4 +4,8 @@ echo PATH: $PATH
 echo ESP8266_RTOS_SDK: $ESP8266_RTOS_SDK
 echo ESP8266_TOOLS: $ESP8266_TOOLS
 echo pwd: $(pwd)
+cd ..
+dir
+xtensa-lx106-elf-gcc --version
+
 
