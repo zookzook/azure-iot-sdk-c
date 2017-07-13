@@ -14,7 +14,7 @@
 ifndef PDIR
 UP_EXTRACT_DIR = ..
 GEN_LIBS = libsample.a
-COMPONENTS_libsample = test/test2.o
+COMPONENTS_libsample = /home/roys/workspace/ESP8266/build_all/esp8266/sample_lib/test/test2.o
 endif
 
 
