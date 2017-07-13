@@ -40,7 +40,7 @@ Build the tools:
 The `make` process takes about 7 minutes on a dedicated Ubuntu box.
 
 ##### 3 - Create an export for the toolchain location:<br/>
-`export ESP8266_TOOLS="whatever/workspace/esp-open-sdk"`
+`export ESP8266_TOOLS="/home/jenkins/workspace/esp-open-sdk"`
 
 ##### 4 - Install the ESP8266 RTOS SDK:
 
@@ -49,7 +49,7 @@ The `make` process takes about 7 minutes on a dedicated Ubuntu box.
 
 ##### 5 - Export the ESP32 SDK location:
 
-`export ESP8266_RTOS_SDK="/whatever/workspace/ESP8266_RTOS_SDK"`
+`export ESP8266_RTOS_SDK="/home/jenkins/workspace/ESP8266_RTOS_SDK"`
 
 ##### 6 - Azure C SDK location:
 The above steps need only be done once. When cloning the Azure IoT C SDK, please put it in a directory named
