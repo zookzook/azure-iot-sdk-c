@@ -14,7 +14,7 @@
 ifndef PDIR
 UP_EXTRACT_DIR = ..
 GEN_LIBS = libsample.a
-COMPONENTS_libsample = test2.o
+COMPONENTS_libsample = test/test2.o
 endif
 
 
