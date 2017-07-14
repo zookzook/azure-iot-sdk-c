@@ -1,1 +1,6 @@
-#include "azure_c_shared_utility/gballoc.h"
+#include <stdbool.h>
+
+_Bool toad()
+{
+    return false;
+}
