@@ -12,7 +12,6 @@
 #     a generated lib/image xxx.a ()
 #
 ifndef PDIR
-CSRCS = file1
 GEN_LIBS = libfolder1.a
 endif
 

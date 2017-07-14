@@ -12,9 +12,7 @@
 #     a generated lib/image xxx.a ()
 #
 ifndef PDIR
-UP_EXTRACT_DIR = ..
-GEN_LIBS = azure_iot.a
-CSRCS = test.c
+GEN_LIBS = libfolder2.a
 endif
 
 

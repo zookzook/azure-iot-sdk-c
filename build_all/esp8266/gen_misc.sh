@@ -8,9 +8,8 @@ export SDK_PATH=~/esp_iot_sdk_freertos
 export BIN_PATH=~/esp8266_bin
 !
 
-export SDK_PATH=/home/roys/workspace/ESP8266_RTOS_SDK
-export BIN_PATH=/home/roys/workspace/build
-export PATH=/home/roys/workspace/esp-open-sdk/xtensa-lx106-elf/bin:$PATH
+export SDK_PATH=$SDK_PATH
+export BIN_PATH=$BIN_PATH
 
 echo "gen_misc.sh version 20150911"
 echo ""
@@ -189,5 +188,4 @@ echo ""
 
 make clean
 
-#make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=QIO SPI_SIZE_MAP=0
-echo make BOOT=$boot APP=$app SPI_SPEED=$spi_speed SPI_MODE=$spi_mode SPI_SIZE_MAP=$spi_size_map
+make BOOT=$boot APP=$app SPI_SPEED=$spi_speed SPI_MODE=$spi_mode SPI_SIZE_MAP=$spi_size_map

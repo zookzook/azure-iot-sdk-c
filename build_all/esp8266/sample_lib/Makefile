@@ -14,7 +14,8 @@
 ifndef PDIR
 UP_EXTRACT_DIR = ..
 GEN_LIBS = libsample.a
-COMPONENTS_libsample = folder1/libfolder1.a
+COMPONENTS_libsample = folder1/libfolder1.a	\
+                       folder2/libfolder2.a
 endif
 
 

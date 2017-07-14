@@ -47,7 +47,7 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-	azure-iot/azure_iot.a
+	sample_lib/libsample.a
 
 LINKFLAGS_eagle.app.v6 = \
 	-L$(SDK_PATH)/lib        \
@@ -110,6 +110,7 @@ DEFINES +=				\
 DDEFINES +=				\
 	$(UNIVERSAL_TARGET_DEFINES)	\
 	$(CONFIGURATION_DEFINES)
+
 
 #############################################################
 # Recursion Magic - Don't touch this!!
