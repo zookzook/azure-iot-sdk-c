@@ -23,8 +23,7 @@ GEN_BINS= eagle.app.v6.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS=    \
 	user    \
-    azure_iot  \
-	sample_lib
+    azure_iot
 
 endif # } PDIR
 
@@ -48,8 +47,7 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-    azure_iot/azure_iot.a      \
-	sample_lib/libsample.a
+    azure_iot/azure_iot.a
 
 LINKFLAGS_eagle.app.v6 = \
 	-L$(SDK_PATH)/lib        \
