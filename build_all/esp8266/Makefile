@@ -47,7 +47,7 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-	sample_lib/libsample.a
+	azure-iot/azure_iot.a
 
 LINKFLAGS_eagle.app.v6 = \
 	-L$(SDK_PATH)/lib        \
