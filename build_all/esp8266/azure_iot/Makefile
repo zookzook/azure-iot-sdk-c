@@ -23,7 +23,6 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-#sdk := /home/roys/workspace/ESP8266
 sdk := ../../..
 DEFINES += -I $(sdk)/c-utility/inc
 
