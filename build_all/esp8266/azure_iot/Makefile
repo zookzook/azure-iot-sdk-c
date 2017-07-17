@@ -14,9 +14,6 @@ sdk := ../../..
 #
 ifndef PDIR
 GEN_LIBS = azure_iot.a
-CSRCS =  \
-$(sdk)/c-utility/adapters/dns_async.c	\ 
-
 endif
 
 
