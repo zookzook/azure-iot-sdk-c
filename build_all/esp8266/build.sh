@@ -3,8 +3,8 @@
  export ESP8266_RTOS_SDK="/home/roys/workspace/ESP8266_RTOS_SDK" 
 
  # Delete these when you're done on PURL2
- export ESP8266_TOOLS="/c/Users/RoyS/Documents/AzureIoT/workspace/esp-open-sdk" 
- export ESP8266_RTOS_SDK="/c/Users/RoyS/Documents/AzureIoT/workspace/ESP8266_RTOS_SDK" 
+ #export ESP8266_TOOLS="/c/Users/RoyS/Documents/AzureIoT/workspace/esp-open-sdk" 
+ #export ESP8266_RTOS_SDK="/c/Users/RoyS/Documents/AzureIoT/workspace/ESP8266_RTOS_SDK" 
 
 
 WORKSPACE_DIR=$( echo $ESP8266_RTOS_SDK | rev | cut -d'/' -f2- | rev)
