@@ -1,4 +1,4 @@
-sdk := ../../..
+sdk := $(AZURE_SDK)
 
 #############################################################
 # Required variables for each makefile
