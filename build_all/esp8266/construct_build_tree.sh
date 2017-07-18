@@ -14,7 +14,7 @@ else
     exit 1 
 fi
 
-BUILD_PROJECT=$2/project
+BUILD_PROJECT=$2
 BUILD_SOURCES_DIR=$BUILD_PROJECT/azure_iot
 BUILD_USER_DIR=$BUILD_PROJECT/user
 
