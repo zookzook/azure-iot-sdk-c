@@ -1,5 +1,5 @@
 if [ "$#" -ne 2 ]; then
-    echo "usage is copy_iot_files SRC_DIR DEST_DIR"
+    echo "usage is copy_iot_files.sh <src_dir> <dest_dir>"
     exit 1 
 fi
 
@@ -63,8 +63,9 @@ $1/c-utility/adapters/tlsio_openssl_compact.c	\
 $1/iothub_client/samples/iothub_client_sample_mqtt/iothub_client_sample_mqtt.c	\
 )
 
+echo "Source files destination:" $2
 for each_file in ${COMPONENT_OBJS[*]}; do
-    echo copying $each_file to $2
+    echo copying $each_file
     cp $each_file $2
 done
 
