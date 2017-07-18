@@ -69,6 +69,10 @@ for each_file in ${COMPONENT_OBJS[*]}; do
     cp $each_file $2
 done
 
+# The ESP8266 compiler has a bug which prevents it from correctly compiling dns_async.c unless it is renamed
+mv $2/dns_async.c $2/dns_async2.c
+
+
 
 
 
