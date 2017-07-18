@@ -34,6 +34,9 @@ DEFINES += -I $(sdk)/c-utility/inc  \
 
 # __STDC_VERSION__ is needed to enable stdbool.h in crt_abstractions.h
 DEFINES += -D__STDC_VERSION__=199901L
+# CONFIG_FREERTOS_HZ is the device tick rate
+DEFINES += -DCONFIG_FREERTOS_HZ=100
+
 
 #############################################################
 # Recursion Magic - Don't touch this!!
