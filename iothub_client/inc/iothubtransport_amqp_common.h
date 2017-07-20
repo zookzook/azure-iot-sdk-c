@@ -5,15 +5,24 @@
 #define IOTHUBTRANSPORTAMQP_COMMON_H
 
 #include "azure_c_shared_utility/strings.h"
-#include "iothub_transport_ll.h"
 #include "azure_c_shared_utility/umock_c_prod.h"
+#include "iothub_transport_ll.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-typedef XIO_HANDLE(*AMQP_GET_IO_TRANSPORT)(const char* target_fqdn);
+typedef struct AMQP_TRANSPORT_PROXY_OPTIONS_TAG
+{
+    const char* host_address;
+    int port;
+    const char* username;
+    const char* password;
+} AMQP_TRANSPORT_PROXY_OPTIONS;
+
+typedef XIO_HANDLE(*AMQP_GET_IO_TRANSPORT)(const char* target_fqdn, const AMQP_TRANSPORT_PROXY_OPTIONS* amqp_transport_proxy_options);
+static const char* OPTION_EVENT_SEND_TIMEOUT_SECS = "event_send_timeout_secs";
 
 MOCKABLE_FUNCTION(, TRANSPORT_LL_HANDLE, IoTHubTransport_AMQP_Common_Create, const IOTHUBTRANSPORT_CONFIG*, config, AMQP_GET_IO_TRANSPORT, get_io_transport);
 MOCKABLE_FUNCTION(, void, IoTHubTransport_AMQP_Common_Destroy, TRANSPORT_LL_HANDLE, handle);
@@ -32,6 +41,7 @@ MOCKABLE_FUNCTION(, IOTHUB_CLIENT_RESULT, IoTHubTransport_AMQP_Common_SetOption,
 MOCKABLE_FUNCTION(, IOTHUB_DEVICE_HANDLE, IoTHubTransport_AMQP_Common_Register, TRANSPORT_LL_HANDLE, handle, const IOTHUB_DEVICE_CONFIG*, device, IOTHUB_CLIENT_LL_HANDLE, iotHubClientHandle, PDLIST_ENTRY, waitingToSend);
 MOCKABLE_FUNCTION(, void, IoTHubTransport_AMQP_Common_Unregister, IOTHUB_DEVICE_HANDLE, deviceHandle);
 MOCKABLE_FUNCTION(, STRING_HANDLE, IoTHubTransport_AMQP_Common_GetHostname, TRANSPORT_LL_HANDLE, handle);
+MOCKABLE_FUNCTION(, IOTHUB_CLIENT_RESULT, IoTHubTransport_AMQP_Common_SendMessageDisposition, MESSAGE_CALLBACK_INFO*, message_data, IOTHUBMESSAGE_DISPOSITION_RESULT, disposition);
 
 #ifdef __cplusplus
 }

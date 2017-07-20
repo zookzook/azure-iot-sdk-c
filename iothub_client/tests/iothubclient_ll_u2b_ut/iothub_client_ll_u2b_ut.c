@@ -12,13 +12,13 @@
 #include <stdlib.h>
 #endif
 
-void* my_gballoc_malloc(size_t size)
+static void* my_gballoc_malloc(size_t size)
 {
     void *result = malloc(size);
     return result;
 }
 
-void my_gballoc_free(void* ptr)
+static void my_gballoc_free(void* ptr)
 {
     free(ptr);
 }
@@ -230,7 +230,7 @@ static const TRANSPORT_PROVIDER* provideFAKE(void);
 #define TEST_STRING_HANDLE_DEVICE_SAS ((STRING_HANDLE)0x2)
 
 #define TEST_API_VERSION "?api-version=2016-11-14"
-#define TEST_IOTHUB_SDK_VERSION "1.1.8"
+#define TEST_IOTHUB_SDK_VERSION "1.1.19"
 
 static const IOTHUB_CLIENT_CONFIG TEST_CONFIG_SAS =
 {
@@ -599,12 +599,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -635,10 +652,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -646,6 +663,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
             .IgnoreArgument(1)
             .IgnoreArgument(3)
             .IgnoreArgument(4)
+            .IgnoreArgument(5)
             .IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             .IgnoreArgument(8);
@@ -734,6 +752,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
             .IgnoreArgument(1);
     }
@@ -746,7 +768,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -858,10 +880,12 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_happypath)
     IoTHubClient_LL_UploadToBlob_Destroy(h);
 }
 
-TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_fails)
+/*Tests_SRS_IOTHUBCLIENT_LL_02_106: [ - x509certificate and x509privatekey saved options shall be passed on the HTTPAPIEX_SetOption ]*/
+TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_with_certificates_happypath)
 {
     ///arrange
     IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE h = IoTHubClient_LL_UploadToBlob_Create(&TEST_CONFIG_SAS);
+    (void)IoTHubClient_LL_UploadToBlob_SetOption(h, "TrustedCerts", "some certificates");
     unsigned char c = '3';
     umock_c_reset_all_calls();
 
@@ -869,6 +893,8 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_
     STRICT_EXPECTED_CALL(HTTPAPIEX_Create(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
         .CaptureReturn(&iotHubHttpApiExHandle)
         .IgnoreArgument(1);
+
+    STRICT_EXPECTED_CALL(HTTPAPIEX_SetOption(IGNORED_PTR_ARG, "TrustedCerts", IGNORED_PTR_ARG));
 
     STRING_HANDLE correlationId;
     STRICT_EXPECTED_CALL(STRING_new())
@@ -891,12 +917,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -927,10 +970,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -938,116 +981,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_
             .IgnoreArgument(1)
             .IgnoreArgument(3)
             .IgnoreArgument(4)
-            .IgnoreArgument(6)
-            .CopyOutArgumentBuffer_statusCode(&FourHundred, sizeof(FourHundred))
-            .IgnoreArgument(8);
-
-        STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
-            .IgnoreArgument(1);
-    }
-
-    STRICT_EXPECTED_CALL(HTTPHeaders_Free(iotHubHttpRequestHeaders1))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(STRING_delete(sasUri))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(STRING_delete(correlationId))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(HTTPAPIEX_Destroy(iotHubHttpApiExHandle))
-        .IgnoreArgument(1);
-
-    ///act
-    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_UploadToBlob_Impl(h, "text.txt", &c, 1);
-
-    ///assert
-    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
-
-
-    ///cleanup
-    IoTHubClient_LL_UploadToBlob_Destroy(h);
-}
-
-/*Tests_SRS_IOTHUBCLIENT_LL_02_077: [ If HTTP statusCode is greater than or equal to 300 then IoTHubClient_LL_UploadToBlob shall fail and return IOTHUB_CLIENT_ERROR. ]*/
-TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step2_httpStatusCode_is_bad_fails)
-{
-    ///arrange
-    IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE h = IoTHubClient_LL_UploadToBlob_Create(&TEST_CONFIG_SAS);
-    unsigned char c = '3';
-    umock_c_reset_all_calls();
-
-    HTTPAPIEX_HANDLE iotHubHttpApiExHandle;
-    STRICT_EXPECTED_CALL(HTTPAPIEX_Create(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
-        .CaptureReturn(&iotHubHttpApiExHandle)
-        .IgnoreArgument(1);
-
-    STRING_HANDLE correlationId;
-    STRICT_EXPECTED_CALL(STRING_new())
-        .CaptureReturn(&correlationId);
-
-    STRING_HANDLE sasUri;
-    STRICT_EXPECTED_CALL(STRING_new())
-        .CaptureReturn(&sasUri);
-
-    HTTP_HEADERS_HANDLE iotHubHttpRequestHeaders1;
-    STRICT_EXPECTED_CALL(HTTPHeaders_Alloc())
-        .CaptureReturn(&iotHubHttpRequestHeaders1);
-
-    {
-        STRING_HANDLE iotHubHttpRelativePath1;
-        STRICT_EXPECTED_CALL(STRING_construct("/devices/"))
-            .CaptureReturn(&iotHubHttpRelativePath1);
-
-        STRICT_EXPECTED_CALL(STRING_concat_with_STRING(IGNORED_PTR_ARG, IGNORED_PTR_ARG)) /*IGNORED_PTR_ARG is the deviceId, which stays nicely tucked in h (handle)*/
-            .IgnoreArgument(1)
-            .IgnoreArgument(2);
-
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
-
-        BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
-        STRICT_EXPECTED_CALL(BUFFER_new())
-            .CaptureReturn(&iotHubHttpMessageBodyResponse1);
-
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Content-Type", "application/json")) /*10*/
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Accept", "application/json"))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "User-Agent", "iothubclient/" TEST_IOTHUB_SDK_VERSION))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", ""))
-            .IgnoreArgument(1);
-
-        STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG)) /*this fetches the SAS from under h (handle)*/
-            .IgnoreArgument(1)
-            .SetReturn(TEST_DEVICE_SAS);
-
-        STRICT_EXPECTED_CALL(HTTPHeaders_ReplaceHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", TEST_DEVICE_SAS))
-            .IgnoreArgument(1);
-
-        const char* iotHubHttpRelativePath1_as_const_char = TEST_DEFAULT_STRING_VALUE;
-        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpRelativePath1))
-            .CaptureReturn(&iotHubHttpRelativePath1_as_const_char)
-            .IgnoreArgument(1);
-
-        STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
-            iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
-            iotHubHttpRelativePath1_as_const_char,
-            iotHubHttpRequestHeaders1,
-            NULL,
-            IGNORED_PTR_ARG,
-            NULL,
-            iotHubHttpMessageBodyResponse1
-        ))
-            .IgnoreArgument(1)
-            .IgnoreArgument(3)
-            .IgnoreArgument(4)
+            .IgnoreArgument(5)
             .IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             .IgnoreArgument(8);
@@ -1136,6 +1070,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step2_httpStatusCode_i
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
             .IgnoreArgument(1);
     }
@@ -1148,7 +1086,487 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step2_httpStatusCode_i
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, "some certificates"))
+            .IgnoreArgument(1)
+            .IgnoreArgument(4)
+            .IgnoreArgument(5)
+            .CopyOutArgumentBuffer_httpStatus(&TwoHundred, sizeof(TwoHundred))
+            ;
+        /*some snprintfs happen here... */
+        STRICT_EXPECTED_CALL(BUFFER_u_char(IGNORED_PTR_ARG))
+            .IgnoreArgument_handle();
+
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG))
+            .IgnoreArgument_size();
+
+        STRICT_EXPECTED_CALL(BUFFER_u_char(IGNORED_PTR_ARG))
+            .IgnoreArgument_handle();
+
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+            ;
+    }
+
+    {/*step3*/
+        STRING_HANDLE uriResource;
+        STRICT_EXPECTED_CALL(STRING_construct(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
+            .CaptureReturn(&uriResource);
+
+        STRICT_EXPECTED_CALL(STRING_concat(uriResource, "/devices/"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat_with_STRING(uriResource, IGNORED_PTR_ARG)) /*50*/
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(uriResource, "/files/notifications"))
+            .IgnoreArgument(1);
+
+        STRING_HANDLE relativePathNotification;
+        STRICT_EXPECTED_CALL(STRING_construct("/devices/"))
+            .CaptureReturn(&relativePathNotification);
+
+        STRICT_EXPECTED_CALL(STRING_concat_with_STRING(relativePathNotification, IGNORED_PTR_ARG))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(relativePathNotification, "/files/notifications/"))
+            .IgnoreArgument(1);
+
+        const char* correlationId_as_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(correlationId))
+            .CaptureReturn(&correlationId_as_char)
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(relativePathNotification, correlationId_as_char))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(relativePathNotification, TEST_API_VERSION))
+            .IgnoreArgument(1);
+
+        const char* relativePathNotification_as_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(relativePathNotification))
+            .CaptureReturn(&relativePathNotification_as_char)
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
+            iotHubHttpApiExHandle,
+            HTTPAPI_REQUEST_POST,
+            relativePathNotification_as_char,
+            iotHubHttpRequestHeaders1,
+            IGNORED_PTR_ARG,
+            IGNORED_PTR_ARG,
+            NULL,
+            NULL
+        ))
+            .IgnoreArgument(1)
+            .IgnoreArgument(3)
+            .IgnoreArgument(4)
+            .IgnoreArgument(5)
+            .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred));
+
+        STRICT_EXPECTED_CALL(STRING_delete(relativePathNotification)) /*60*/
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_delete(uriResource))
+            .IgnoreArgument(1);
+    }
+
+    STRICT_EXPECTED_CALL(BUFFER_delete(IGNORED_PTR_ARG))
+        .IgnoreArgument_handle();
+
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG))
+        .IgnoreArgument_ptr();
+
+    STRICT_EXPECTED_CALL(BUFFER_delete(IGNORED_PTR_ARG))
+        .IgnoreArgument_handle();
+
+    STRICT_EXPECTED_CALL(HTTPHeaders_Free(iotHubHttpRequestHeaders1))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(sasUri))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(correlationId))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Destroy(iotHubHttpApiExHandle))
+        .IgnoreArgument(1);
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_UploadToBlob_Impl(h, "text.txt", &c, 1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+
+
+    ///cleanup
+    IoTHubClient_LL_UploadToBlob_Destroy(h);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_02_106: [ - x509certificate and x509privatekey saved options shall be passed on the HTTPAPIEX_SetOption ]*/
+TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_with_certificates_unhappypath)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE h = IoTHubClient_LL_UploadToBlob_Create(&TEST_CONFIG_SAS);
+    (void)IoTHubClient_LL_UploadToBlob_SetOption(h, "TrustedCerts", "some certificates");
+    unsigned char c = '3';
+    umock_c_reset_all_calls();
+
+    HTTPAPIEX_HANDLE iotHubHttpApiExHandle;
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Create(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
+        .CaptureReturn(&iotHubHttpApiExHandle)
+        .IgnoreArgument(1);
+
+    STRICT_EXPECTED_CALL(HTTPAPIEX_SetOption(IGNORED_PTR_ARG, "TrustedCerts", IGNORED_PTR_ARG))
+        .SetReturn(HTTPAPIEX_ERROR);
+
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Destroy(iotHubHttpApiExHandle))
+        .IgnoreArgument(1);
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_UploadToBlob_Impl(h, "text.txt", &c, 1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+
+
+    ///cleanup
+    IoTHubClient_LL_UploadToBlob_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step1_http_code_is400_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE h = IoTHubClient_LL_UploadToBlob_Create(&TEST_CONFIG_SAS);
+    unsigned char c = '3';
+    umock_c_reset_all_calls();
+
+    HTTPAPIEX_HANDLE iotHubHttpApiExHandle;
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Create(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
+        .CaptureReturn(&iotHubHttpApiExHandle)
+        .IgnoreArgument(1);
+
+    STRING_HANDLE correlationId;
+    STRICT_EXPECTED_CALL(STRING_new())
+        .CaptureReturn(&correlationId);
+
+    STRING_HANDLE sasUri;
+    STRICT_EXPECTED_CALL(STRING_new())
+        .CaptureReturn(&sasUri);
+
+    HTTP_HEADERS_HANDLE iotHubHttpRequestHeaders1;
+    STRICT_EXPECTED_CALL(HTTPHeaders_Alloc())
+        .CaptureReturn(&iotHubHttpRequestHeaders1);
+
+    {
+        STRING_HANDLE iotHubHttpRelativePath1;
+        STRICT_EXPECTED_CALL(STRING_construct("/devices/"))
+            .CaptureReturn(&iotHubHttpRelativePath1);
+
+        STRICT_EXPECTED_CALL(STRING_concat_with_STRING(IGNORED_PTR_ARG, IGNORED_PTR_ARG)) /*IGNORED_PTR_ARG is the deviceId, which stays nicely tucked in h (handle)*/
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
+            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
+
+
+        BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
+        STRICT_EXPECTED_CALL(BUFFER_new())
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1);
+
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Content-Type", "application/json")) /*10*/
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Accept", "application/json"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "User-Agent", "iothubclient/" TEST_IOTHUB_SDK_VERSION))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", ""))
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG)) /*this fetches the SAS from under h (handle)*/
+            .IgnoreArgument(1)
+            .SetReturn(TEST_DEVICE_SAS);
+
+        STRICT_EXPECTED_CALL(HTTPHeaders_ReplaceHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", TEST_DEVICE_SAS))
+            .IgnoreArgument(1);
+
+        const char* iotHubHttpRelativePath1_as_const_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpRelativePath1))
+            .CaptureReturn(&iotHubHttpRelativePath1_as_const_char)
+            .IgnoreArgument(1);
+
+
+
+        STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
+            iotHubHttpApiExHandle,
+            HTTPAPI_REQUEST_POST,
+            iotHubHttpRelativePath1_as_const_char,
+            iotHubHttpRequestHeaders1,
+            jsonBuffer,
+            IGNORED_PTR_ARG,
+            NULL,
+            iotHubHttpMessageBodyResponse1
+        ))
+            .IgnoreArgument(1)
+            .IgnoreArgument(3)
+            .IgnoreArgument(4)
+            .IgnoreArgument(5)
+            .IgnoreArgument(6)
+            .CopyOutArgumentBuffer_statusCode(&FourHundred, sizeof(FourHundred))
+            .IgnoreArgument(8);
+
+        STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
+            .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
+            .IgnoreArgument(1);
+    }
+
+    STRICT_EXPECTED_CALL(HTTPHeaders_Free(iotHubHttpRequestHeaders1))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(sasUri))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(correlationId))
+        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Destroy(iotHubHttpApiExHandle))
+        .IgnoreArgument(1);
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_UploadToBlob_Impl(h, "text.txt", &c, 1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+
+
+    ///cleanup
+    IoTHubClient_LL_UploadToBlob_Destroy(h);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_02_077: [ If HTTP statusCode is greater than or equal to 300 then IoTHubClient_LL_UploadToBlob shall fail and return IOTHUB_CLIENT_ERROR. ]*/
+TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step2_httpStatusCode_is_bad_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE h = IoTHubClient_LL_UploadToBlob_Create(&TEST_CONFIG_SAS);
+    unsigned char c = '3';
+    umock_c_reset_all_calls();
+
+    HTTPAPIEX_HANDLE iotHubHttpApiExHandle;
+    STRICT_EXPECTED_CALL(HTTPAPIEX_Create(TEST_IOTHUBNAME "." TEST_IOTHUBSUFFIX))
+        .CaptureReturn(&iotHubHttpApiExHandle)
+        .IgnoreArgument(1);
+
+    STRING_HANDLE correlationId;
+    STRICT_EXPECTED_CALL(STRING_new())
+        .CaptureReturn(&correlationId);
+
+    STRING_HANDLE sasUri;
+    STRICT_EXPECTED_CALL(STRING_new())
+        .CaptureReturn(&sasUri);
+
+    HTTP_HEADERS_HANDLE iotHubHttpRequestHeaders1;
+    STRICT_EXPECTED_CALL(HTTPHeaders_Alloc())
+        .CaptureReturn(&iotHubHttpRequestHeaders1);
+
+    {
+        STRING_HANDLE iotHubHttpRelativePath1;
+        STRICT_EXPECTED_CALL(STRING_construct("/devices/"))
+            .CaptureReturn(&iotHubHttpRelativePath1);
+
+        STRICT_EXPECTED_CALL(STRING_concat_with_STRING(IGNORED_PTR_ARG, IGNORED_PTR_ARG)) /*IGNORED_PTR_ARG is the deviceId, which stays nicely tucked in h (handle)*/
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
+            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
+
+
+        BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
+        STRICT_EXPECTED_CALL(BUFFER_new())
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1);
+
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Content-Type", "application/json")) /*10*/
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Accept", "application/json"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "User-Agent", "iothubclient/" TEST_IOTHUB_SDK_VERSION))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", ""))
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG)) /*this fetches the SAS from under h (handle)*/
+            .IgnoreArgument(1)
+            .SetReturn(TEST_DEVICE_SAS);
+
+        STRICT_EXPECTED_CALL(HTTPHeaders_ReplaceHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", TEST_DEVICE_SAS))
+            .IgnoreArgument(1);
+
+        const char* iotHubHttpRelativePath1_as_const_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpRelativePath1))
+            .CaptureReturn(&iotHubHttpRelativePath1_as_const_char)
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
+            iotHubHttpApiExHandle,
+            HTTPAPI_REQUEST_POST,
+            iotHubHttpRelativePath1_as_const_char,
+            iotHubHttpRequestHeaders1,
+            jsonBuffer,
+            IGNORED_PTR_ARG,
+            NULL,
+            iotHubHttpMessageBodyResponse1
+        ))
+            .IgnoreArgument(1)
+            .IgnoreArgument(3)
+            .IgnoreArgument(4)
+            .IgnoreArgument(5)
+            .IgnoreArgument(6)
+            .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
+            .IgnoreArgument(8);
+
+        unsigned char* iotHubHttpMessageBodyResponse1_unsigned_char = (unsigned char*)TEST_DEFAULT_STRING_VALUE;
+        size_t iotHubHttpMessageBodyResponse1_size;
+        STRICT_EXPECTED_CALL(BUFFER_u_char(iotHubHttpMessageBodyResponse1))
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1_unsigned_char)
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(BUFFER_length(iotHubHttpMessageBodyResponse1))
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1_size)
+            .IgnoreArgument(1);
+
+        STRING_HANDLE iotHubHttpMessageBodyResponse1_as_STRING_HANDLE;
+        STRICT_EXPECTED_CALL(STRING_from_byte_array(iotHubHttpMessageBodyResponse1_unsigned_char, iotHubHttpMessageBodyResponse1_size)) /*20*/
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1_as_STRING_HANDLE)
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+
+        const char* iotHubHttpMessageBodyResponse1_as_const_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpMessageBodyResponse1_as_STRING_HANDLE))
+            .CaptureReturn(&iotHubHttpMessageBodyResponse1_as_const_char)
+            .IgnoreArgument(1);
+
+        JSON_Value* allJson;
+        STRICT_EXPECTED_CALL(json_parse_string(iotHubHttpMessageBodyResponse1_as_const_char))
+            .CaptureReturn(&allJson)
+            .IgnoreArgument(1);
+
+        JSON_Object* jsonObject;
+        STRICT_EXPECTED_CALL(json_value_get_object(allJson))
+            .CaptureReturn(&jsonObject)
+            .IgnoreArgument(1);
+
+        const char* json_correlationId = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(json_object_get_string(jsonObject, "correlationId"))
+            .CaptureReturn(&json_correlationId)
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(STRING_copy(correlationId, json_correlationId))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+
+        const char* json_hostName = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(json_object_get_string(jsonObject, "hostName"))
+            .CaptureReturn(&json_hostName)
+            .IgnoreArgument(1);
+
+        const char* json_containerName = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(json_object_get_string(jsonObject, "containerName"))
+            .CaptureReturn(&json_containerName)
+            .IgnoreArgument(1);
+
+        const char* json_blobName = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(json_object_get_string(jsonObject, "blobName"))
+            .CaptureReturn(&json_blobName)
+            .IgnoreArgument(1);
+
+        const char* json_sasToken = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(json_object_get_string(jsonObject, "sasToken"))
+            .CaptureReturn(&json_sasToken)
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(STRING_copy(sasUri, "https://")) /*30*/
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, json_hostName))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, "/"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, json_containerName))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, "/"))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, json_blobName))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+        STRICT_EXPECTED_CALL(STRING_concat(sasUri, json_sasToken))
+            .IgnoreArgument(1)
+            .IgnoreArgument(2);
+
+        STRICT_EXPECTED_CALL(json_value_free(allJson))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpMessageBodyResponse1_as_STRING_HANDLE))
+            .IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
+            .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
+        STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
+            .IgnoreArgument(1);
+    }
+
+    {/*step2*/
+        STRICT_EXPECTED_CALL(BUFFER_new()); /*this is building the buffer that will contain the response from Blob_UploadFromSasUri*/
+
+        const char* sasUri_as_const_char = TEST_DEFAULT_STRING_VALUE;
+        STRICT_EXPECTED_CALL(STRING_c_str(sasUri))
+            .CaptureReturn(&sasUri_as_const_char)
+            .IgnoreArgument(1);
+
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -1294,12 +1712,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step3_httpStatusCode_i
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -1330,10 +1765,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step3_httpStatusCode_i
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -1341,6 +1776,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step3_httpStatusCode_i
             .IgnoreArgument(1)
             .IgnoreArgument(3)
             .IgnoreArgument(4)
+			.IgnoreArgument(5)
             .IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             .IgnoreArgument(8);
@@ -1429,6 +1865,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step3_httpStatusCode_i
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
             .IgnoreArgument(1);
     }
@@ -1441,7 +1881,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_when_step3_httpStatusCode_i
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -1599,12 +2039,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -1633,10 +2090,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -1644,6 +2101,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
             .IgnoreArgument(1)
             .IgnoreArgument(3)
             .IgnoreArgument(4)
+            .IgnoreArgument(5)
             .IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             .IgnoreArgument(8);
@@ -1732,6 +2190,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
             .IgnoreArgument(1);
     }
@@ -1744,7 +2206,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -1849,30 +2311,33 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
     ///act
 
     size_t calls_that_cannot_fail[] = { 
-        14, /*STRING_c_str*/
-        16, /*STRING_c_str*/
-        18, /*BUFFER_u_char*/
-        19, /*BUFFER_length*/
+		12, /*STRING_c_str*/
+        19, /*STRING_c_str*/
         21, /*STRING_c_str*/
-        37, /*json_value_free*/
-        38, /*STRING_delete*/
-        39, /*BUFFER_delete*/
-        40, /*STRING_delete*/
-        42, /*STRING_c_str*/
-        44, /*BUFFER_u_char*/
-        46, /*BUFFER_u_char*/
-        55, /*STRING_c_str*/
-        58, /*STRING_c_str*/
-        60, /*BUFFER_delete*/
-        60, /*STRING_delete*/
-        61, /*STRING_delete*/
-        62, /*BUFFER_delete*/
-        63, /*gballoc_free*/
-        64, /*BUFFER_delete*/
-        65, /*HTTPHeaders_Free*/
-        66, /*STRING_delete*/
-        67, /*STRING_delete*/
-        68, /*HTTPAPIEX_Destroy*/
+        23, /*BUFFER_u_char*/
+        24, /*BUFFER_length*/
+        26, /*STRING_c_str*/
+        42, /*json_value_free*/
+        43, /*STRING_delete*/
+        44, /*BUFFER_delete*/
+        46, /*BUFFER_delete*/
+        47, /*STRING_delete*/
+        48, /*STRING_delete*/
+        50, /*STRING_c_str*/
+        52, /*BUFFER_u_char*/
+        54, /*BUFFER_u_char*/
+        63, /*STRING_c_str*/
+        66, /*STRING_c_str*/
+        67, /*BUFFER_delete*/
+        68, /*STRING_delete*/
+        69, /*STRING_delete*/
+        70, /*BUFFER_delete*/
+        71, /*gballoc_free*/
+        72, /*BUFFER_delete*/
+        73, /*HTTPHeaders_Free*/
+        74, /*STRING_delete*/
+        75, /*STRING_delete*/
+        76, /*HTTPAPIEX_Destroy*/
     };
 
     for (size_t i = 0; i < umock_c_negative_tests_call_count(); i++)
@@ -1903,6 +2368,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_SAS_token_unhappypaths)
             IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_UploadToBlob_Impl(h, "text.txt", &c, 1);
 
             ///assert
+			//ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
             ASSERT_ARE_NOT_EQUAL_WITH_MSG(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result, temp_str);
         }
     }
@@ -2042,12 +2508,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_happypath)
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -2078,10 +2561,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_happypath)
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_ExecuteRequest( /*20*/
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             IGNORED_PTR_ARG
@@ -2095,6 +2578,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_happypath)
             .IgnoreArgument_responseHeadersHandle()
             .IgnoreArgument_responseContent()
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
+			.IgnoreArgument(6)
             ;
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_Destroy(IGNORED_PTR_ARG))
             .IgnoreArgument_handle();
@@ -2187,6 +2671,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_happypath)
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1))
             .IgnoreArgument(1);
     }
@@ -2199,7 +2687,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_happypath)
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -2355,13 +2843,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step1_httpStatusCode_i
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
-
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
             .CaptureReturn(&iotHubHttpMessageBodyResponse1);
@@ -2391,10 +2895,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step1_httpStatusCode_i
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_ExecuteRequest(
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             IGNORED_PTR_ARG
@@ -2407,6 +2911,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step1_httpStatusCode_i
             .IgnoreArgument_statusCode()
             .IgnoreArgument_responseHeadersHandle()
             .IgnoreArgument_responseContent()
+			.IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&FourHundred, sizeof(FourHundred))
             ;
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_Destroy(IGNORED_PTR_ARG))
@@ -2418,6 +2923,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step1_httpStatusCode_i
 
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1))
             .IgnoreArgument(1);
     }
@@ -2477,14 +2986,31 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step3_httpStatusCode_i
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
-        BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
+		BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
             .CaptureReturn(&iotHubHttpMessageBodyResponse1);
 
@@ -2513,10 +3039,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step3_httpStatusCode_i
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_ExecuteRequest( /*20*/
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             IGNORED_PTR_ARG
@@ -2529,6 +3055,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step3_httpStatusCode_i
             .IgnoreArgument_statusCode()
             .IgnoreArgument_responseHeadersHandle()
             .IgnoreArgument_responseContent()
+			.IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             ;
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_Destroy(IGNORED_PTR_ARG))
@@ -2622,6 +3149,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step3_httpStatusCode_i
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1))
             .IgnoreArgument(1);
     }
@@ -2634,7 +3165,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_when_step3_httpStatusCode_i
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -2795,24 +3326,41 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*7*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION))
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
             .CaptureReturn(&iotHubHttpMessageBodyResponse1);
 
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Content-Type", "application/json")) /*10*/
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Content-Type", "application/json")) /*15*/
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Accept", "application/json"))
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "User-Agent", "iothubclient/" TEST_IOTHUB_SDK_VERSION))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", "")) /*14*/
+        STRICT_EXPECTED_CALL(HTTPHeaders_AddHeaderNameValuePair(iotHubHttpRequestHeaders1, "Authorization", "")) /*18*/
             .IgnoreArgument(1);
 
 
@@ -2828,13 +3376,13 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .IgnoreAllArguments();
         STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG))
             .IgnoreArgument_handle();
-        STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_ExecuteRequest( /*20*/
+        STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_ExecuteRequest( /*25*/
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             IGNORED_PTR_ARG
@@ -2848,6 +3396,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .IgnoreArgument_responseHeadersHandle()
             .IgnoreArgument_responseContent()
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
+			.IgnoreArgument(6)
             ;
         STRICT_EXPECTED_CALL(HTTPAPIEX_SAS_Destroy(IGNORED_PTR_ARG))
             .IgnoreArgument_handle();
@@ -2861,7 +3410,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
         STRICT_EXPECTED_CALL(BUFFER_u_char(iotHubHttpMessageBodyResponse1))
             .CaptureReturn(&iotHubHttpMessageBodyResponse1_unsigned_char)
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(BUFFER_length(iotHubHttpMessageBodyResponse1))
+        STRICT_EXPECTED_CALL(BUFFER_length(iotHubHttpMessageBodyResponse1))	/*30*/
             .CaptureReturn(&iotHubHttpMessageBodyResponse1_size)
             .IgnoreArgument(1);
 
@@ -2872,7 +3421,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .IgnoreArgument(2);
 
         const char* iotHubHttpMessageBodyResponse1_as_const_char = TEST_DEFAULT_STRING_VALUE;
-        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpMessageBodyResponse1_as_STRING_HANDLE))
+        STRICT_EXPECTED_CALL(STRING_c_str(iotHubHttpMessageBodyResponse1_as_STRING_HANDLE))/*32*/
             .CaptureReturn(&iotHubHttpMessageBodyResponse1_as_const_char)
             .IgnoreArgument(1);
 
@@ -2934,12 +3483,16 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(json_value_free(allJson))
+        STRICT_EXPECTED_CALL(json_value_free(allJson))/*48*/
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpMessageBodyResponse1_as_STRING_HANDLE))
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1))
             .IgnoreArgument(1);
     }
@@ -2952,7 +3505,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -3063,34 +3616,37 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_deviceKey_unhappypaths)
     umock_c_negative_tests_snapshot();
 
     size_t calls_that_cannot_fail[] = {
-        19, /*STRING_c_str*/
-        21, /*HTTPAPIEX_SAS_Destroy*/
-        22, /*STRING_delete*/
-        23, /*STRING_delete*/
-        24, /*BUFFER_u_char*/
-        25, /*BUFFER_length*/
-        27, /*STRING_c_str*/
-        43, /*json_value_free*/
-        44, /*STRING_delete*/
-        45, /*BUFFER_delete*/
-        46, /*STRING_delete*/
-        48, /*STRING_c_str*/
-        50, /*BUFFER_u_char*/
-        52, /*BUFFER_u_char*/
-        61, /*STRING_c_str*/
-        66, /*STRING_c_str*/
-        68, /*HTTPAPIEX_SAS_Destroy*/
-        69, /*STRING_delete*/
-        70, /*STRING_delete*/
-        71, /*STRING_delete*/
-        72, /*BUFFER_delete*/
-        73, /*gballoc_free*/
-        74, /*BUFFER_delete*/
-        75, /*HTTPHeaders_Free*/
+		11, /*STRING_length*/
+        12, /*STRING_c_str*/
+        24, /*STRING_c_str*/
+        26, /*HTTPAPIEX_SAS_Destroy*/
+        27, /*STRING_delete*/
+        28, /*STRING_delete*/
+        29, /*BUFFER_u_char*/
+        30, /*BUFFER_length*/
+        32, /*STRING_c_str*/
+        48, /*json_value_free*/
+        49, /*STRING_delete*/
+        50, /*BUFFER_delete*/
+        51, /*BUFFER_delete*/
+        52, /*STRING_delete*/
+        53, /*STRING_delete*/
+        55, /*STRING_c_str*/
+        57, /*BUFFER_u_char*/
+        59, /*BUFFER_u_char*/
+        68, /*STRING_c_str*/
+        73, /*STRING_c_str*/
+        75, /*HTTPAPIEX_SAS_Destroy*/
         76, /*STRING_delete*/
         77, /*STRING_delete*/
-        78, /*HTTPAPIEX_Destroy*/
-
+        78, /*STRING_delete*/
+        79, /*BUFFER_delete*/
+        80, /*gballoc_free*/
+        81, /*BUFFER_delete*/
+        82, /*HTTPHeaders_Free*/
+        83, /*STRING_delete*/
+        84, /*STRING_delete*/
+        85, /*HTTPAPIEX_Destroy*/
     };
 
     for (size_t i = 0; i < umock_c_negative_tests_call_count(); i++)
@@ -3169,13 +3725,31 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
-            .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
             .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
+			
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
             .CaptureReturn(&iotHubHttpMessageBodyResponse1);
@@ -3194,10 +3768,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            IGNORED_PTR_ARG,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -3294,6 +3868,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1)) /*40*/
             .IgnoreArgument(1);
     }
@@ -3306,7 +3884,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -3467,12 +4045,29 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .IgnoreArgument(1)
             .IgnoreArgument(2);
 
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files/"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "/files"))
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, "text.txt"))
+        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*7*/
             .IgnoreArgument(1);
-        STRICT_EXPECTED_CALL(STRING_concat(iotHubHttpRelativePath1, TEST_API_VERSION)) /*10*/
-            .IgnoreArgument(1);
+			
+		STRING_HANDLE blobJson;
+        STRICT_EXPECTED_CALL(STRING_construct("{ \"blobName\": \""))
+            .CaptureReturn(&blobJson);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, IGNORED_PTR_ARG))
+			.IgnoreArgument(1)
+			.IgnoreArgument(2);
+		STRICT_EXPECTED_CALL(STRING_concat(blobJson, "\" }"))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_length(blobJson))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_c_str(blobJson))
+			.IgnoreArgument(1);
+			
+		BUFFER_HANDLE jsonBuffer;
+        STRICT_EXPECTED_CALL(BUFFER_create(IGNORED_PTR_ARG, IGNORED_NUM_ARG))
+            .IgnoreArgument_source()
+            .IgnoreArgument_size()
+			.CaptureReturn(&jsonBuffer);
 
         BUFFER_HANDLE iotHubHttpMessageBodyResponse1;
         STRICT_EXPECTED_CALL(BUFFER_new())
@@ -3492,10 +4087,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
 
         STRICT_EXPECTED_CALL(HTTPAPIEX_ExecuteRequest(
             iotHubHttpApiExHandle,
-            HTTPAPI_REQUEST_GET,
+            HTTPAPI_REQUEST_POST,
             iotHubHttpRelativePath1_as_const_char,
             iotHubHttpRequestHeaders1,
-            NULL,
+            jsonBuffer,
             IGNORED_PTR_ARG,
             NULL,
             iotHubHttpMessageBodyResponse1
@@ -3503,6 +4098,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .IgnoreArgument(1)
             .IgnoreArgument(3)
             .IgnoreArgument(4)
+            .IgnoreArgument(5)
             .IgnoreArgument(6)
             .CopyOutArgumentBuffer_statusCode(&TwoHundred, sizeof(TwoHundred))
             .IgnoreArgument(8)
@@ -3592,6 +4188,10 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .IgnoreArgument(1);
         STRICT_EXPECTED_CALL(BUFFER_delete(iotHubHttpMessageBodyResponse1))
             .IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(BUFFER_delete(jsonBuffer))
+			.IgnoreArgument(1);
+		STRICT_EXPECTED_CALL(STRING_delete(blobJson))
+			.IgnoreArgument(1);
         STRICT_EXPECTED_CALL(STRING_delete(iotHubHttpRelativePath1))
             .IgnoreArgument(1);
     }
@@ -3604,7 +4204,7 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
             .CaptureReturn(&sasUri_as_const_char)
             .IgnoreArgument(1);
 
-        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
+        STRICT_EXPECTED_CALL(Blob_UploadFromSasUri(sasUri_as_const_char, &c, 1, IGNORED_PTR_ARG, IGNORED_PTR_ARG, NULL))
             .IgnoreArgument(1)
             .IgnoreArgument(4)
             .IgnoreArgument(5)
@@ -3707,32 +4307,34 @@ TEST_FUNCTION(IoTHubClient_LL_UploadToBlob_passes_x509_information_to_HTTPAPIEX_
     umock_c_negative_tests_snapshot();
 
     size_t calls_that_cannot_fail[] = {
-        15, /*STRING_c_str*/
-        17, /*BUFFER_u_char*/
-        18, /*BUFFER_length*/
+		13, /*STRING_length*/
+		14, /*STRING_c_str*/
         20, /*STRING_c_str*/
-
-        36, /*json_value_free*/
-        37, /*STRING_delete*/
-        38, /*BUFFER_delete*/
-        39, /*STRING_delete*/
-       
-        41, /*STRING_c_str*/
-        43, /*BUFFER_u_char*/
-        45, /*BUFFER_u_char*/
-
-        54, /*STRING_c_str*/
-        57, /*STRING_c_str*/
-        59, /*STRING_delete*/
-        
-        60, /*STRING_delete*/
-        61, /*BUFFER_delete*/
-        62, /*gballoc_free*/
-        63, /*BUFFER_delete*/
-        64, /*HTTPHeaders_Free*/
-        65, /*STRING_delete*/
+//        22, /*STRING_c_str*/
+        22, /*BUFFER_u_char*/
+        23, /*BUFFER_length*/
+        25, /*STRING_c_str*/
+        41, /*json_value_free*/
+        42, /*STRING_delete*/
+        43, /*BUFFER_delete*/
+        44, /*BUFFER_delete*/
+        45, /*STRING_delete*/
+        46, /*STRING_delete*/
+        48, /*STRING_c_str*/
+        50, /*BUFFER_u_char*/
+        52, /*BUFFER_u_char*/
+        61, /*STRING_c_str*/
+        64, /*STRING_c_str*/
+        65, /*BUFFER_delete*/
         66, /*STRING_delete*/
-        67, /*HTTPAPIEX_Destroy*/
+        67, /*STRING_delete*/
+        68, /*BUFFER_delete*/
+        69, /*gballoc_free*/
+        70, /*BUFFER_delete*/
+        71, /*HTTPHeaders_Free*/
+        72, /*STRING_delete*/
+        73, /*STRING_delete*/
+        74, /*HTTPAPIEX_Destroy*/
     };
 
     for (size_t i = 0; i < umock_c_negative_tests_call_count(); i++)

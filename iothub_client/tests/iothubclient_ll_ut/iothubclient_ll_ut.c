@@ -41,15 +41,18 @@ void* my_gballoc_realloc(void* ptr, size_t size)
 #include "azure_c_shared_utility/tickcounter.h"
 #include "azure_c_shared_utility/agenttime.h"
 #include "azure_c_shared_utility/constbuffer.h"
+#include "azure_c_shared_utility/platform.h"
 
 #include "iothub_client_version.h"
 #include "iothub_message.h"
+#include "iothub_client_authorization.h"
 
 #undef ENABLE_MOCKS
 
 #include "iothub_transport_ll.h"
 #include "iothub_client_ll.h"
 #include "iothub_client_private.h"
+#include "iothub_client_options.h"
 
 #define ENABLE_MOCKS
 
@@ -77,13 +80,16 @@ MOCKABLE_FUNCTION(, int, FAKE_IoTHubTransport_SetRetryPolicy, TRANSPORT_LL_HANDL
 MOCKABLE_FUNCTION(, IOTHUB_CLIENT_RESULT, FAKE_IoTHubTransport_GetSendStatus, IOTHUB_DEVICE_HANDLE, handle, IOTHUB_CLIENT_STATUS*, iotHubClientStatus);
 MOCKABLE_FUNCTION(, int, FAKE_IoTHubTransport_Subscribe_DeviceTwin, IOTHUB_DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, void, FAKE_IoTHubTransport_Unsubscribe_DeviceTwin, IOTHUB_DEVICE_HANDLE, handle);
+MOCKABLE_FUNCTION(, IOTHUB_CLIENT_RESULT, FAKE_IoTHubTransport_SendMessageDisposition, MESSAGE_CALLBACK_INFO*, messageData, IOTHUBMESSAGE_DISPOSITION_RESULT, disposition);
+MOCKABLE_FUNCTION(, const char*, FAKE_IoTHubMessage_GetMessageId, IOTHUB_MESSAGE_HANDLE, message);
 MOCKABLE_FUNCTION(, IOTHUB_PROCESS_ITEM_RESULT, FAKE_IoTHubTransport_ProcessItem, TRANSPORT_LL_HANDLE, handle, IOTHUB_IDENTITY_TYPE, item_type, IOTHUB_IDENTITY_INFO*, iothub_item);
 MOCKABLE_FUNCTION(, int, FAKE_IoTHubTransport_Subscribe_DeviceMethod, IOTHUB_DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, void, FAKE_IoTHubTransport_Unsubscribe_DeviceMethod, IOTHUB_DEVICE_HANDLE, handle);
 MOCKABLE_FUNCTION(, void, connectionStatusCallback, IOTHUB_CLIENT_CONNECTION_STATUS, result3, IOTHUB_CLIENT_CONNECTION_STATUS_REASON, reason, void*, userContextCallback);
 MOCKABLE_FUNCTION(, IOTHUBMESSAGE_DISPOSITION_RESULT, messageCallback, IOTHUB_MESSAGE_HANDLE, message, void*, userContextCallback);
+MOCKABLE_FUNCTION(, bool, messageCallbackEx, MESSAGE_CALLBACK_INFO*, messageData, void*, userContextCallback);
 MOCKABLE_FUNCTION(, void, eventConfirmationCallback, IOTHUB_CLIENT_CONFIRMATION_RESULT, result2, void*, userContextCallback);
-MOCKABLE_FUNCTION(, int, FAKE_IoTHubTransport_DeviceMethod_Response, IOTHUB_DEVICE_HANDLE, handle, METHOD_HANDLE, methodId, const unsigned char*, response, size_t, resp_size, int, status_response)
+MOCKABLE_FUNCTION(, int, FAKE_IoTHubTransport_DeviceMethod_Response, IOTHUB_DEVICE_HANDLE, handle, METHOD_HANDLE, methodId, const unsigned char*, response, size_t, resp_size, int, status_response);
 
 #undef ENABLE_MOCKS
 
@@ -117,9 +123,9 @@ IMPLEMENT_UMOCK_C_ENUM_TYPE(IOTHUB_CLIENT_RETRY_POLICY, IOTHUB_CLIENT_RETRY_POLI
 static TEST_MUTEX_HANDLE test_serialize_mutex;
 static TEST_MUTEX_HANDLE g_dllByDll;
 
-//Check ProtocolGateway Configuration.
-static bool checkProtocolGatewayHostName;
-static bool checkProtocolGatewayIsNull;
+bool g_fail_string_construct_sprintf;
+bool g_fail_platform_get_platform_info;
+bool g_fail_string_concat_with_string;
 
 static const char* TEST_STRING_VALUE = "Test string value";
 
@@ -162,9 +168,7 @@ static const char* TEST_STRING_VALUE = "Test string value";
 static const char* TEST_METHOD_NAME = "method_name";
 static const char* TEST_CHAR = "TestChar";
 static tickcounter_ms_t g_current_ms = 0;
-static const char* TEST_DEVICE_METHOD_RESPONSE = "{ device:method, response:true}";
-
-static size_t g_fail_constbuffer_create;
+static const char* TEST_DEVICE_METHOD_RESPONSE = "{device:method, response:true}";
 
 const unsigned char TEST_REPORTED_STATE[] = { 0x01, 0x02, 0x03 };
 const size_t TEST_REPORTED_SIZE = sizeof(TEST_REPORTED_STATE) / sizeof(TEST_REPORTED_STATE[0]);
@@ -185,7 +189,7 @@ static const IOTHUB_CLIENT_CONFIG TEST_CONFIG =
     provideFAKE,            /* IOTHUB_CLIENT_TRANSPORT_PROVIDER protocol;   */
     TEST_DEVICE_ID,         /* const char* deviceId;                        */
     TEST_DEVICE_KEY,        /* const char* deviceKey;                       */
-    TEST_DEVICE_SAS,   /* const char* deviceSasToken;                  */
+    TEST_DEVICE_SAS,        /* const char* deviceSasToken;                  */
     TEST_IOTHUBNAME,        /* const char* iotHubName;                      */
     TEST_IOTHUBSUFFIX,      /* const char* iotHubSuffix;                    */
 };
@@ -224,6 +228,19 @@ static const IOTHUB_CLIENT_DEVICE_CONFIG TEST_DEVICE_CONFIG_NULL_device_key_NULL
     NULL
 };
 
+static IOTHUB_AUTHORIZATION_HANDLE my_IoTHubClient_Auth_Create(const char* device_key, const char* device_id, const char* sas_token)
+{
+    (void)device_key;
+    (void)device_id;
+    (void)sas_token;
+    return (IOTHUB_AUTHORIZATION_HANDLE)my_gballoc_malloc(1);
+}
+
+static void my_IoTHubClient_Auth_Destroy(IOTHUB_AUTHORIZATION_HANDLE handle)
+{
+    free(handle);
+}
+
 static STRING_HANDLE my_STRING_new(void)
 {
     return (STRING_HANDLE)my_gballoc_malloc(1);
@@ -235,16 +252,51 @@ static STRING_HANDLE my_STRING_construct(const char* psz)
     return (STRING_HANDLE)my_gballoc_malloc(1);
 }
 
-static void my_STRING_delete(STRING_HANDLE handle)
+STRING_HANDLE STRING_construct_sprintf(const char* psz, ...)
+{
+    (void)psz;
+    STRING_HANDLE result;
+    if (g_fail_string_construct_sprintf)
+    {
+        result = (STRING_HANDLE)NULL;
+    }
+    else
+    {
+        result = (STRING_HANDLE)my_gballoc_malloc(1);   
+    }
+    return result;
+}
+
+static int m_STRING_concat_with_STRING(STRING_HANDLE handle, STRING_HANDLE arg1)
 {
     (void)handle;
-    my_gballoc_free(handle);
+    (void)arg1;
+    int result;
+    if (g_fail_string_concat_with_string)
+    {
+        result = -1;
+    }
+    else
+    {
+        result = 0;
+    }
+    return result;
 }
 
 static STRING_HANDLE my_STRING_clone(STRING_HANDLE handle)
 {
     (void)handle;
     return (STRING_HANDLE)my_gballoc_malloc(1);
+}
+
+static void my_STRING_delete(STRING_HANDLE handle)
+{
+    (void)handle;
+
+    if (handle != TEST_STRING_HANDLE)
+    {
+        my_gballoc_free(handle);
+    }
 }
 
 static STRING_TOKENIZER_HANDLE my_STRING_TOKENIZER_create(STRING_HANDLE handle)
@@ -316,9 +368,9 @@ static IOTHUB_DEVICE_HANDLE my_FAKE_IoTHubTransport_Register(TRANSPORT_LL_HANDLE
     return (IOTHUB_DEVICE_HANDLE)my_gballoc_malloc(1);
 }
 
-static void my_FAKE_IoTHubTransport_Unregister(TRANSPORT_LL_HANDLE handle)
+static void my_FAKE_IoTHubTransport_Unregister(IOTHUB_DEVICE_HANDLE deviceHandle)
 {
-    my_gballoc_free(handle);
+    my_gballoc_free(deviceHandle);
 }
 
 static IOTHUB_CLIENT_RESULT my_FAKE_IoTHubTransport_GetSendStatus(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIENT_STATUS* iotHubClientStatus)
@@ -346,8 +398,29 @@ static int my_FAKE_DeviceMethod_Response(IOTHUB_DEVICE_HANDLE handle, METHOD_HAN
     return 0;
 }
 
+STRING_HANDLE my_FAKE_IoTHubTransport_GetHostname(TRANSPORT_LL_HANDLE handle)
+{
+    (void)handle;
+    return TEST_STRING_HANDLE;
+}
+
+STRING_HANDLE my_plafrom_get_platform_info(void)
+{
+    STRING_HANDLE result;
+    if (g_fail_platform_get_platform_info)
+    {
+        result = NULL;
+    }
+    else
+    {
+        result = (STRING_HANDLE)my_gballoc_malloc(1);
+    }
+    return result;
+}
+
 static TRANSPORT_PROVIDER FAKE_transport_provider =
 {
+    FAKE_IoTHubTransport_SendMessageDisposition,   /*pfIotHubTransport_SendMessageDisposition IoTHubTransport_SendMessageDisposition;*/
     FAKE_IoTHubTransport_Subscribe_DeviceMethod, /*pfIoTHubTransport_Subscribe_DeviceMethod IoTHubTransport_Subscribe_DeviceMethod;*/
     FAKE_IoTHubTransport_Unsubscribe_DeviceMethod, /*pfIoTHubTransport_Unsubscribe_DeviceMethod IoTHubTransport_Unsubscribe_DeviceMethod;*/
     FAKE_IoTHubTransport_DeviceMethod_Response, /*pfIoTHubTransport_DeviceMethod_Response IoTHubTransport_DeviceMethod_Response;*/
@@ -391,6 +464,22 @@ extern "C"
 
 DEFINE_ENUM_STRINGS(UMOCK_C_ERROR_CODE, UMOCK_C_ERROR_CODE_VALUES)
 
+static MESSAGE_CALLBACK_INFO* make_test_message_info(IOTHUB_MESSAGE_HANDLE message)
+{
+    MESSAGE_CALLBACK_INFO* result = (MESSAGE_CALLBACK_INFO*)malloc(sizeof(MESSAGE_CALLBACK_INFO));
+    result->messageHandle = message;
+    result->transportContext = NULL;
+
+    return result;
+}
+
+static void destroy_test_message_info(MESSAGE_CALLBACK_INFO* oneMessageData)
+{
+    IoTHubMessage_Destroy(oneMessageData->messageHandle);
+    free(oneMessageData->transportContext);
+    free(oneMessageData);
+}
+
 static void on_umock_c_error(UMOCK_C_ERROR_CODE error_code)
 {
     char temp_str[256];
@@ -432,16 +521,16 @@ TEST_SUITE_INITIALIZE(suite_init)
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_IDENTITY_TYPE, void*);
     REGISTER_UMOCK_ALIAS_TYPE(BUFFER_HANDLE, void*);
     REGISTER_UMOCK_ALIAS_TYPE(METHOD_HANDLE, void*);
+    REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_AUTHORIZATION_HANDLE, void*);
 
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_RESULT, int);
+    REGISTER_UMOCK_ALIAS_TYPE(IOTHUBMESSAGE_DISPOSITION_RESULT, int);
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_PROCESS_ITEM_RESULT, int);
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_STATUS, int);
     REGISTER_UMOCK_ALIAS_TYPE(DEVICE_TWIN_UPDATE_STATE, int);
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_CONNECTION_STATUS, int);
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_CONNECTION_STATUS_REASON, int);
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_RETRY_POLICY, int);
-
-
 
 #ifndef DONT_USE_UPLOADTOBLOB
     REGISTER_UMOCK_ALIAS_TYPE(IOTHUB_CLIENT_LL_UPLOADTOBLOB_HANDLE, void*);
@@ -455,7 +544,7 @@ TEST_SUITE_INITIALIZE(suite_init)
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_ProcessItem, IOTHUB_PROCESS_OK);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_ProcessItem, IOTHUB_PROCESS_ERROR);
 
-    REGISTER_GLOBAL_MOCK_RETURN(FAKE_IoTHubTransport_GetHostname, (STRING_HANDLE)0x42);
+    REGISTER_GLOBAL_MOCK_HOOK(FAKE_IoTHubTransport_GetHostname, my_FAKE_IoTHubTransport_GetHostname);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_GetHostname, NULL);
     REGISTER_GLOBAL_MOCK_RETURN(FAKE_IoTHubTransport_SetOption, IOTHUB_CLIENT_OK);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_SetOption, IOTHUB_CLIENT_ERROR);
@@ -471,10 +560,14 @@ TEST_SUITE_INITIALIZE(suite_init)
     REGISTER_GLOBAL_MOCK_HOOK(FAKE_IoTHubTransport_GetSendStatus, my_FAKE_IoTHubTransport_GetSendStatus);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_GetSendStatus, IOTHUB_CLIENT_ERROR);
     REGISTER_GLOBAL_MOCK_RETURN(FAKE_IoTHubTransport_Subscribe_DeviceMethod, 0);
+
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_Subscribe_DeviceMethod, __FAILURE__);
+    REGISTER_GLOBAL_MOCK_RETURN(FAKE_IoTHubMessage_GetMessageId, "1");
+    REGISTER_GLOBAL_MOCK_RETURN(FAKE_IoTHubTransport_SendMessageDisposition, IOTHUB_CLIENT_OK);
+    REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_SendMessageDisposition, IOTHUB_CLIENT_ERROR);
+
     REGISTER_GLOBAL_MOCK_HOOK(FAKE_IoTHubTransport_DeviceMethod_Response, my_FAKE_DeviceMethod_Response);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(FAKE_IoTHubTransport_DeviceMethod_Response, __FAILURE__);
-
 
 #ifndef DONT_USE_UPLOADTOBLOB
     REGISTER_GLOBAL_MOCK_HOOK(IoTHubClient_LL_UploadToBlob_Create, my_IoTHubClient_LL_UploadToBlob_Create);
@@ -485,6 +578,7 @@ TEST_SUITE_INITIALIZE(suite_init)
 
     REGISTER_GLOBAL_MOCK_RETURN(deviceMethodCallback, 200);
 
+    REGISTER_GLOBAL_MOCK_RETURN(IoTHubMessage_CreateFromString, (IOTHUB_MESSAGE_HANDLE)0x44);
     REGISTER_GLOBAL_MOCK_RETURN(IoTHubMessage_Clone, (IOTHUB_MESSAGE_HANDLE)0x44);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(IoTHubMessage_Clone, NULL);
 
@@ -498,10 +592,11 @@ TEST_SUITE_INITIALIZE(suite_init)
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(STRING_new, NULL);
     REGISTER_GLOBAL_MOCK_HOOK(STRING_construct, my_STRING_construct);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(STRING_construct, NULL);
-    REGISTER_GLOBAL_MOCK_HOOK(STRING_delete, my_STRING_delete);
+    REGISTER_GLOBAL_MOCK_HOOK(STRING_concat_with_STRING, m_STRING_concat_with_STRING);
     REGISTER_GLOBAL_MOCK_RETURN(STRING_c_str, TEST_STRING_VALUE);
     REGISTER_GLOBAL_MOCK_HOOK(STRING_clone, my_STRING_clone);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(STRING_clone, NULL);
+    REGISTER_GLOBAL_MOCK_HOOK(STRING_delete, my_STRING_delete);
 
     REGISTER_GLOBAL_MOCK_RETURN(BUFFER_build, 0);
     REGISTER_GLOBAL_MOCK_FAIL_RETURN(BUFFER_build, __FAILURE__);
@@ -534,6 +629,14 @@ TEST_SUITE_INITIALIZE(suite_init)
 
     REGISTER_GLOBAL_MOCK_RETURN(test_message_callback_async, IOTHUBMESSAGE_ACCEPTED);
     REGISTER_GLOBAL_MOCK_RETURN(messageCallback, IOTHUBMESSAGE_ACCEPTED);
+    REGISTER_GLOBAL_MOCK_RETURN(messageCallbackEx, true);
+
+    REGISTER_GLOBAL_MOCK_HOOK(IoTHubClient_Auth_Create, my_IoTHubClient_Auth_Create);
+    REGISTER_GLOBAL_MOCK_FAIL_RETURN(IoTHubClient_Auth_Create, NULL);
+
+    REGISTER_GLOBAL_MOCK_HOOK(IoTHubClient_Auth_Destroy, my_IoTHubClient_Auth_Destroy);
+
+    REGISTER_GLOBAL_MOCK_HOOK(platform_get_platform_info, my_plafrom_get_platform_info);
 }
 
 TEST_SUITE_CLEANUP(suite_cleanup)
@@ -547,6 +650,9 @@ TEST_FUNCTION_INITIALIZE(method_init)
 {
     TEST_MUTEX_ACQUIRE(test_serialize_mutex);
     umock_c_reset_all_calls();
+    g_fail_string_construct_sprintf = false;
+    g_fail_platform_get_platform_info = false;
+    g_fail_string_concat_with_string = false;
 }
 
 TEST_FUNCTION_CLEANUP(TestMethodCleanup)
@@ -568,34 +674,42 @@ static int should_skip_index(size_t current_index, const size_t skip_array[], si
     return result;
 }
 
-static void setup_iothubclient_ll_create_mocks()
+static void setup_iothubclient_ll_create_mocks(bool use_device_config)
 {
-    STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));
 
+    STRICT_EXPECTED_CALL(IoTHubClient_Auth_Create(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG));
+    if (use_device_config)
+    {
+        STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_GetHostname(IGNORED_PTR_ARG)); /*this is getting the hostname as STRING_HANDLE*/
+        STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG)) /*this is getting the hostname as const char* */
+            .SetReturn(TEST_HOSTNAME_VALUE);
+        STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG));
+    }
+    else
+    {
+        STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Create(IGNORED_PTR_ARG));
+    }
 #ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Create(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Create(IGNORED_PTR_ARG));
 #endif /*DONT_USE_UPLOADTOBLOB*/
-
     STRICT_EXPECTED_CALL(tickcounter_create());
-
     STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
         .IgnoreArgument(1);
     STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
         .IgnoreArgument(1);
     STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
         .IgnoreArgument(1);
-
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Create(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Register(TEST_TRANSPORT_LL_HANDLE, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
-        .IgnoreArgument(2)
-        .IgnoreArgument(3)
-        .IgnoreArgument(4);
-
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SetRetryPolicy(TEST_TRANSPORT_LL_HANDLE, TEST_RETRY_POLICY, 0));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Register(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SetRetryPolicy(IGNORED_PTR_ARG, TEST_RETRY_POLICY, 0));
+    if (use_device_config)
+    {
+        STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+        STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    }
 }
 
 static void setup_iothubclient_ll_sendreportedstate_mocks()
@@ -661,9 +775,9 @@ static void setup_iothubclient_ll_createfromconnectionstring_mocks(const char* d
     EXPECTED_CALL(STRING_TOKENIZER_get_next_token(TEST_STRING_TOKENIZER_HANDLE, TEST_STRING_HANDLE, IGNORED_PTR_ARG))
         .SetReturn(1); // 27
 
-    setup_iothubclient_ll_create_mocks();
+    setup_iothubclient_ll_create_mocks(false);
 
-    EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG)); // 36
+    EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG)); // 38
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
@@ -674,43 +788,6 @@ static void setup_iothubclient_ll_createfromconnectionstring_mocks(const char* d
     EXPECTED_CALL(STRING_TOKENIZER_destroy(IGNORED_PTR_ARG));
 
     STRICT_EXPECTED_CALL(gballoc_free(IGNORED_NUM_ARG)).IgnoreArgument_ptr();
-}
-
-static void setup_iothubclient_ll_createwithtransport_mocks()
-{
-    STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG)) /*this is IoTHubName (temporary)*/
-        .IgnoreArgument(1);
-#ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_GetHostname(IGNORED_PTR_ARG)) /*this is getting the hostname as STRING_HANDLE*/
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG)) /*this is getting the hostname as const char* */
-        .IgnoreArgument(1)
-        .SetReturn(TEST_HOSTNAME_VALUE);
-    STRICT_EXPECTED_CALL(gballoc_malloc(IGNORED_NUM_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Create(IGNORED_PTR_ARG)) /*this is creating the UploadToBlob HANDLE*/
-        .IgnoreArgument(1);
-#endif
-    STRICT_EXPECTED_CALL(tickcounter_create());
-    STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_InitializeListHead(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Register(TEST_DEVICE_CONFIG.transportHandle, IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG))
-        .IgnoreArgument(2)
-        .IgnoreArgument(3)
-        .IgnoreArgument(4);
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SetRetryPolicy(TEST_TRANSPORT_LL_HANDLE, TEST_RETRY_POLICY, 0))
-        .IgnoreArgument(1)
-        .IgnoreArgument(2)
-        .IgnoreArgument(3);
-#ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-#endif
-
 }
 
 /*Tests_SRS_IOTHUBCLIENT_LL_05_001: [IoTHubClient_LL_CreateFromConnectionString shall obtain the version string by a call to IoTHubClient_GetVersionString.]*/
@@ -750,7 +827,7 @@ TEST_FUNCTION(IoTHubClient_LL_CreateFromConnectionString_with_DeviceKey_fail)
     umock_c_negative_tests_snapshot();
 
     // act
-    size_t calls_cannot_fail[] = { 0, 10, 12, 13, 16, 19, 21, 24, 27, 28, 29, 30, 31, 32, 33, 37, 38, 39, 40, 41, 42, 43, 44, 45 };
+    size_t calls_cannot_fail[] = { 0, 10, 16, 19, 24, 27, 29, 30, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49 };
     size_t count = umock_c_negative_tests_call_count();
     for (size_t index = 0; index < count; index++)
     {
@@ -871,7 +948,7 @@ TEST_FUNCTION(IoTHubClient_LL_CreateFromConnectionString_withGatewayHostName_suc
     EXPECTED_CALL(STRING_TOKENIZER_get_next_token(TEST_STRING_TOKENIZER_HANDLE, TEST_STRING_HANDLE, IGNORED_PTR_ARG))
         .SetReturn(1); // 27
 
-    setup_iothubclient_ll_create_mocks();
+    setup_iothubclient_ll_create_mocks(false);
 
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG)); // 36
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
@@ -982,7 +1059,7 @@ TEST_FUNCTION(IoTHubClient_LL_CreateFromConnectionString_with_x509_true_succeeds
     EXPECTED_CALL(STRING_TOKENIZER_get_next_token(TEST_STRING_TOKENIZER_HANDLE, TEST_STRING_HANDLE, IGNORED_PTR_ARG))
         .SetReturn(1);
 
-    setup_iothubclient_ll_create_mocks();
+    setup_iothubclient_ll_create_mocks(false);
 
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
     EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
@@ -1103,6 +1180,7 @@ TEST_FUNCTION(IoTHubClient_LL_Create_with_NULL_protocol_fails)
 /*Tests_SRS_IOTHUBCLIENT_LL_02_006: [IoTHubClient_LL_Create shall populate a structure of type IOTHUBTRANSPORT_CONFIG with the information from config parameter and the previous DLIST and shall pass that to the underlying layer _Create function.]*/
 /*Tests_SRS_IOTHUBCLIENT_LL_02_008: [Otherwise, IoTHubClient_LL_Create shall succeed and return a non-NULL handle.] */
 /*Tests_SRS_IOTHUBCLIENT_LL_17_008: [IoTHubClient_LL_Create shall call the transport _Register function with the deviceId, DeviceKey and waitingToSend list.] */
+/*Tests_SRS_IOTHUBCLIENT_LL_07_029: [ IoTHubClient_LL_Create shall create the Auth module with the device_key, device_id, and/or deviceSasToken values ] */
 TEST_FUNCTION(IoTHubClient_LL_Create_suceeds)
 {
     //arrange
@@ -1111,7 +1189,7 @@ TEST_FUNCTION(IoTHubClient_LL_Create_suceeds)
     device.deviceKey = TEST_CONFIG.deviceKey;
     device.deviceSasToken = NULL;
 
-    setup_iothubclient_ll_create_mocks();
+    setup_iothubclient_ll_create_mocks(false);
 
     //act
     IOTHUB_CLIENT_LL_HANDLE result = IoTHubClient_LL_Create(&TEST_CONFIG);
@@ -1141,12 +1219,12 @@ TEST_FUNCTION(IoTHubClient_LL_Create_fail)
     device.deviceSasToken = NULL;
     umock_c_reset_all_calls();
 
-    setup_iothubclient_ll_create_mocks();
+    setup_iothubclient_ll_create_mocks(false);
 
     umock_c_negative_tests_snapshot();
 
     // act
-    size_t calls_cannot_fail[] = { 3, 4, 5 };
+    size_t calls_cannot_fail[] = { 1, 2, 8, 9, 10 };
     size_t count = umock_c_negative_tests_call_count();
     for (size_t index = 0; index < count; index++)
     {
@@ -1216,7 +1294,7 @@ TEST_FUNCTION(IoTHubClient_LL_CreateWithTransport_Succeeds)
     device.deviceKey = TEST_DEVICE_CONFIG.deviceKey;
     device.deviceSasToken = NULL;
 
-    setup_iothubclient_ll_createwithtransport_mocks();
+    setup_iothubclient_ll_create_mocks(true);
 
     //act
     IOTHUB_CLIENT_LL_HANDLE result = IoTHubClient_LL_CreateWithTransport(&TEST_DEVICE_CONFIG);
@@ -1245,24 +1323,22 @@ TEST_FUNCTION(IoTHubClient_LL_CreateWithTransport_fail)
     device.deviceKey = TEST_DEVICE_CONFIG.deviceKey;
     device.deviceSasToken = NULL;
 
-    setup_iothubclient_ll_createwithtransport_mocks();
+    setup_iothubclient_ll_create_mocks(true);
 
     //act
     umock_c_negative_tests_snapshot();
 
     // act
-#ifndef DONT_USE_UPLOADTOBLOB
-    size_t calls_cannot_fail[] = { 1, 2, 6, 7, 8, 11};
-#endif
+    size_t calls_cannot_fail[] = { 1, 2, 6, 10, 11, 12, 15, 16 };
+
     size_t count = umock_c_negative_tests_call_count();
     for (size_t index = 0; index < count; index++)
     {
-#ifndef DONT_USE_UPLOADTOBLOB
         if (should_skip_index(index, calls_cannot_fail, sizeof(calls_cannot_fail) / sizeof(calls_cannot_fail[0])) != 0)
         {
             continue;
         }
-#endif
+
         umock_c_negative_tests_reset();
         umock_c_negative_tests_fail_call(index);
 
@@ -1303,27 +1379,23 @@ TEST_FUNCTION(IoTHubClient_LL_Destroys_the_underlying_transport_succeeds)
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
     umock_c_reset_all_calls();
 
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Destroy(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_Auth_Destroy(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG));
 
 #ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG));
 #endif
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
 
     //act
     IoTHubClient_LL_Destroy(handle);
@@ -1342,26 +1414,22 @@ TEST_FUNCTION(IoTHubClient_LL_Destroys_unregisters_but_does_not_destroy_transpor
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_CreateWithTransport(&TEST_DEVICE_CONFIG);
     umock_c_reset_all_calls();
 
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_Auth_Destroy(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG));
 
 #ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG));
 #endif
 
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
 
 
     //act
@@ -1462,37 +1530,29 @@ TEST_FUNCTION(IoTHubClient_LL_Destroy_after_sendEvent_succeeds)
     IoTHubClient_LL_SendEventAsync(handle, TEST_MESSAGE_HANDLE, test_event_confirmation_callback, (void*)1);
     umock_c_reset_all_calls();
 
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unregister(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Destroy(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)) /*because there is one item in the list*/
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)); /*because there is one item in the list*/
     STRICT_EXPECTED_CALL(test_event_confirmation_callback(IOTHUB_CLIENT_CONFIRMATION_BECAUSE_DESTROY, (void*)1));
-    STRICT_EXPECTED_CALL(IoTHubMessage_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubMessage_Destroy(IGNORED_PTR_ARG));
 
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)) /*IOTHUBMESSAGE*/
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG)); /*IOTHUBMESSAGE*/
 
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)) /*because there is one item in the list*/
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)) /*because there is one item in the list*/
-        .IgnoreArgument(1);
-    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)) /*because there is one item in the list*/
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)); /*because there is one item in the list*/
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)); /*because there is one item in the list*/
+    STRICT_EXPECTED_CALL(DList_RemoveHeadList(IGNORED_PTR_ARG)); /*because there is one item in the list*/
 
-    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_Auth_Destroy(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(tickcounter_destroy(IGNORED_PTR_ARG));
 
 #ifndef DONT_USE_UPLOADTOBLOB
-    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(IoTHubClient_LL_UploadToBlob_Destroy(IGNORED_PTR_ARG));
 #endif
 
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
 
     //act
     IoTHubClient_LL_Destroy(handle);
@@ -1561,7 +1621,6 @@ TEST_FUNCTION(IoTHubClient_LL_SetConnectionStatusCallback_with_NULL_iotHubClient
 {
     ///arrange
 
-
     ///act
     IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetConnectionStatusCallback(NULL, connectionStatusCallback, (void*)1);
 
@@ -1607,6 +1666,7 @@ TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_with_NULL_calls_Unsubscribe_and
 {
     ///arrange
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback(handle, test_message_callback_async, (void*)1);
     umock_c_reset_all_calls();
 
     STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unsubscribe(IGNORED_PTR_ARG))
@@ -1620,6 +1680,229 @@ TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_with_NULL_calls_Unsubscribe_and
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_010: [If parameter messageCallback is NULL and the _SetMessageCallback had not been called to subscribe for messages, then IoTHubClient_LL_SetMessageCallback shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_with_NULL_after_SetMessageCallbacEx_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_011: [If parameter messageCallback is non-NULL and the _SetMessageCallback_Ex had been used to susbscribe for messages, then IoTHubClient_LL_SetMessageCallback shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_after_SetMessageCallbacEx_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback(handle, messageCallback, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_021: [IoTHubClient_LL_SetMessageCallback_Ex shall fail and return IOTHUB_CLIENT_INVALID_ARG if parameter iotHubClientHandle is NULL.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_with_NULL_iotHubClientHandle_fails)
+{
+    ///arrange
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(NULL, messageCallbackEx, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_018: [If parameter messageCallback is NULL and IoTHubClient_LL_SetMessageCallback_Ex had not been used to subscribe for messages, then IoTHubClient_LL_SetMessageCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_with_NULL_not_subscribed_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_019: [If parameter messageCallback is NULL and IoTHubClient_LL_SetMessageCallback had been used to subscribe for messages, then IoTHubClient_LL_SetMessageCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_with_NULL_after_SetMessageCallback_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback(handle, messageCallback, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_023: [If parameter messageCallback is NULL then IoTHubClient_LL_SetMessageCallback_Ex shall call the underlying layer's _Unsubscribe function and return IOTHUB_CLIENT_OK.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_with_NULL_unsubscribe_succeeds)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unsubscribe(IGNORED_PTR_ARG))
+        .IgnoreArgument(1);
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_025: [If the underlying layer's _Subscribe function fails, then IoTHubClient_LL_SetMessageCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR. Otherwise IoTHubClient_LL_SetMessageCallback shall succeed and return IOTHUB_CLIENT_OK.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_Subscribe_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Subscribe(IGNORED_PTR_ARG))
+        .IgnoreArgument_handle()
+        .SetReturn(__LINE__);
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_020: [If parameter messageCallback is non-NULL, and IoTHubClient_LL_SetMessageCallback had been used to subscribe for messages, then IoTHubClient_LL_SetMessageCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_after_SetMessageCallback_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback(handle, messageCallback, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_024: [If parameter messageCallback is non-NULL then IoTHubClient_LL_SetMessageCallback_Ex shall call the underlying layer's _Subscribe function.]*/
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_Ex_happy_path_succeeds)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Subscribe(IGNORED_PTR_ARG))
+        .IgnoreArgument_handle();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_026: [IoTHubClient_LL_SendMessageDisposition shall fail and return IOTHUB_CLIENT_INVALID_ARG if parameter iotHubClientHandle is NULL.]*/
+TEST_FUNCTION(IoTHubClient_LL_SendMessageDisposition_with_first_NULL_fails)
+{
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SendMessageDisposition(NULL, NULL, IOTHUBMESSAGE_ACCEPTED);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_027: [IoTHubClient_LL_SendMessageDisposition shall return the result from calling the underlying layer's _Send_Message_Disposition.]*/
+TEST_FUNCTION(IoTHubClient_LL_SendMessageDisposition_with_second_NULL_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SendMessageDisposition(NULL, NULL, IOTHUBMESSAGE_ACCEPTED);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_027: [IoTHubClient_LL_SendMessageDisposition shall return the result from calling the underlying layer's Send_MessageDisposition.]*/
+TEST_FUNCTION(IoTHubClient_LL_SendMessageDisposition_Succeeds)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SendMessageDisposition(testMessage, IOTHUBMESSAGE_ACCEPTED));
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SendMessageDisposition(handle, testMessage, IOTHUBMESSAGE_ACCEPTED);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    destroy_test_message_info(testMessage);
     IoTHubClient_LL_Destroy(handle);
 }
 
@@ -1837,7 +2120,7 @@ TEST_FUNCTION(IoTHubClient_LL_SetRetryPolicy_success)
     IoTHubClient_LL_Destroy(handle);
 }
 
-/*Tests_SRS_IOTHUBCLIENT_LL_25_114: [**IotHubClient_LL_ConnectionStatusCallBack shall call non-callback set by the user from IoTHubClient_LL_SetConnectionStatusCallback passing the status, reason and the passed userContextCallback.]*/
+/*Tests_SRS_IOTHUBCLIENT_LL_25_114: [**IoTHubClient_LL_ConnectionStatusCallBack shall call non-callback set by the user from IoTHubClient_LL_SetConnectionStatusCallback passing the status, reason and the passed userContextCallback.]*/
 TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_calls_upper_layer_succeeds)
 {
     ///arrange
@@ -1849,7 +2132,7 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_calls_upper_layer_succeed
     STRICT_EXPECTED_CALL(connectionStatusCallback((IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG, (void*)11)).IgnoreAllArguments();
 
     ///act
-    IotHubClient_LL_ConnectionStatusCallBack(handle, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
+    IoTHubClient_LL_ConnectionStatusCallBack(handle, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
 
     ///assert
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
@@ -1857,7 +2140,7 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_calls_upper_layer_succeed
     IoTHubClient_LL_Destroy(handle);
 }
 
-/*Tests_SRS_IOTHUBCLIENT_LL_25_113: [If parameter connectionStatus is NULL or parameter handle is NULL then IotHubClient_LL_ConnectionStatusCallBack shall return.] */
+/*Tests_SRS_IOTHUBCLIENT_LL_25_113: [If parameter connectionStatus is NULL or parameter handle is NULL then IoTHubClient_LL_ConnectionStatusCallBack shall return.] */
 TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_parameter_fails)
 {
     ///arrange
@@ -1867,7 +2150,7 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_parameter_fails
     umock_c_reset_all_calls();
 
     ///act
-    IotHubClient_LL_ConnectionStatusCallBack(NULL, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
+    IoTHubClient_LL_ConnectionStatusCallBack(NULL, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
 
     ///assert
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
@@ -1875,7 +2158,7 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_parameter_fails
     IoTHubClient_LL_Destroy(handle);
 }
 
-/*Tests_SRS_IOTHUBCLIENT_LL_25_113: [If parameter connectionStatus is NULL or parameter handle is NULL then IotHubClient_LL_ConnectionStatusCallBack shall return.] */
+/*Tests_SRS_IOTHUBCLIENT_LL_25_113: [If parameter connectionStatus is NULL or parameter handle is NULL then IoTHubClient_LL_ConnectionStatusCallBack shall return.] */
 TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_callback_fails)
 {
     ///arrange
@@ -1885,7 +2168,7 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_callback_fails)
     umock_c_reset_all_calls();
 
     ///act
-    IotHubClient_LL_ConnectionStatusCallBack(NULL, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
+    IoTHubClient_LL_ConnectionStatusCallBack(NULL, (IOTHUB_CLIENT_CONNECTION_STATUS)IGNORED_NUM_ARG, (IOTHUB_CLIENT_CONNECTION_STATUS_REASON)IGNORED_NUM_ARG);
 
     ///assert
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
@@ -1893,22 +2176,18 @@ TEST_FUNCTION(IoTHubClient_LL_ConnectionStatusCallBack_with_NULL_callback_fails)
     IoTHubClient_LL_Destroy(handle);
 }
 
-
-/*Tests_SRS_IOTHUBCLIENT_LL_02_019: [If parameter messageCallback is NULL then IoTHubClient_LL_SetMessageCallback shall call the underlying layer's _Unsubscribe function and return IOTHUB_CLIENT_OK.] */
-TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_with_NULL_calls_Unsubscribe_and_succeeds_2)
+/*Tests_SRS_IOTHUBCLIENT_LL_10_010: [If parameter messageCallback is NULL and the _SetMessageCallback had not been called to subscribe for messages, then IoTHubClient_LL_SetMessageCallback shall fail and return IOTHUB_CLIENT_ERROR.] */
+TEST_FUNCTION(IoTHubClient_LL_SetMessageCallback_with_NULL_before_subscribe_fails)
 {
     //arrange
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
     umock_c_reset_all_calls();
 
-    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unsubscribe(IGNORED_PTR_ARG))
-        .IgnoreArgument(1);
-
     //act
     IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetMessageCallback(handle, NULL, (void*)1);
 
     //assert
-    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     //cleanup
@@ -2165,58 +2444,222 @@ TEST_FUNCTION(IoTHubClient_LL_SendComplete_with_3_items_one_with_callback_but_ba
 }
 
 /*Tests_SRS_IOTHUBCLIENT_LL_02_029: [If parameter handle is NULL then IoTHubClient_LL_MessageCallback shall return IOTHUBMESSAGE_ABANDONED.] */
-TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_NULL_parameter_fails)
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_handle_NULL_parameter_fails)
 {
     //arrange
 
     //act
-    IOTHUBMESSAGE_DISPOSITION_RESULT result = IoTHubClient_LL_MessageCallback(NULL, (IOTHUB_MESSAGE_HANDLE)1);
+    bool result = IoTHubClient_LL_MessageCallback(NULL, (MESSAGE_CALLBACK_INFO*)1);
 
     ///assert
-    ASSERT_ARE_EQUAL(IOTHUBMESSAGE_DISPOSITION_RESULT, IOTHUBMESSAGE_ABANDONED, result);
+    ASSERT_IS_FALSE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 }
 
-/*Tests_SRS_IOTHUBCLIENT_LL_02_030: [IoTHubClient_LL_MessageCallback shall invoke the last callback function (the parameter messageCallback to IoTHubClient_LL_SetMessageCallback) passing the message and the passed userContextCallback.]*/
-/*Tests_SRS_IOTHUBCLIENT_LL_02_031: [Then IoTHubClient_LL_MessageCallback shall return what the user function returns.]*/
-TEST_FUNCTION(IoTHubClient_LL_MessageCallback_calls_upper_layer_succeeds)
+/*Tests_SRS_IOTHUBCLIENT_LL_02_029: [If either parameter `handle` or `messageData` is NULL then IoTHubClient_LL_MessageCallback shall return IOTHUBMESSAGE_ABANDONED.] */
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageData_NULL_parameter_fails)
 {
     //arrange
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
-    (void)IoTHubClient_LL_SetMessageCallback(handle, test_message_callback_async, (void*)11);
     umock_c_reset_all_calls();
 
-    STRICT_EXPECTED_CALL(get_time(NULL));
-    STRICT_EXPECTED_CALL(test_message_callback_async((IOTHUB_MESSAGE_HANDLE)1, (void*)11));
-
     //act
-    IOTHUBMESSAGE_DISPOSITION_RESULT result = IoTHubClient_LL_MessageCallback(handle, (IOTHUB_MESSAGE_HANDLE)1);
+    bool result = IoTHubClient_LL_MessageCallback(handle, NULL);
 
-    //assert
-    ASSERT_ARE_EQUAL(IOTHUBMESSAGE_DISPOSITION_RESULT, IOTHUBMESSAGE_ACCEPTED, result);
+    ///assert
+    ASSERT_IS_FALSE(result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     //cleanup
     IoTHubClient_LL_Destroy(handle);
 }
 
-/*Tests_SRS_IOTHUBCLIENT_LL_02_032: [If the last callback function was NULL, then IoTHubClient_LL_MessageCallback  shall return IOTHUBMESSAGE_ABANDONED.] */
-TEST_FUNCTION(IoTHubClient_LL_MessageCallback_without_subscribe_fails)
+/*Tests_SRS_IOTHUBCLIENT_LL_10_004: [If messageHandle field of the messageData parameter is NULL then IoTHubClient_LL_MessageCallback shall return false.] */
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageData_messageHandle_is_NULL_fails)
 {
     //arrange
-
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(NULL);
+    umock_c_reset_all_calls();
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_FALSE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_02_032: [If messageCallbackType is NONE then IoTHubClient_LL_MessageCallback shall report false.] */
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_unsubscribed_returns_false)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
     umock_c_reset_all_calls();
 
     STRICT_EXPECTED_CALL(get_time(NULL));
 
     //act
-    IOTHUBMESSAGE_DISPOSITION_RESULT result = IoTHubClient_LL_MessageCallback(handle, (IOTHUB_MESSAGE_HANDLE)1);
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
 
-    ///assert
-    ASSERT_ARE_EQUAL(IOTHUBMESSAGE_DISPOSITION_RESULT, IOTHUBMESSAGE_ABANDONED, result);
+    //assert
+    ASSERT_IS_FALSE(result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
-    ///cleanup
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_02_030: [If messageCallbackType is LEGACY then IoTHubClient_LL_MessageCallback shall invoke the last callback function (the parameter messageCallback to IoTHubClient_LL_SetMessageCallback) passing the message and the passed userContextCallback.]*/
+/*Tests_SRS_IOTHUBCLIENT_LL_10_007: [If messageCallbackType is LEGACY then IoTHubClient_LL_MessageCallback shall send the message disposition as returned by the client to the underlying layer and return true.]*/
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallback_calls_client_layer_succeeds)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback(handle, test_message_callback_async, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(test_message_callback_async(testMessage->messageHandle, (void*)11));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SendMessageDisposition(testMessage, IOTHUBMESSAGE_ACCEPTED));
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_TRUE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallback_calls_client_layer_succeeds_report_disposition_fails)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback(handle, test_message_callback_async, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(test_message_callback_async(testMessage->messageHandle, (void*)11));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SendMessageDisposition(testMessage, IOTHUBMESSAGE_ACCEPTED))
+        .SetReturn(IOTHUB_CLIENT_ERROR);
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_TRUE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallbackEx_calls_client_layer_succeeds)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(messageCallbackEx(testMessage, (void*)11));
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_TRUE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_009: [If messageCallbackType is ASYNC then  IoTHubClient_LL_MessageCallback shall return what messageCallbacEx returns.] */
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallbackEx_calls_client_layer_reports_true)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(messageCallbackEx(testMessage, (void*)11));
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_TRUE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/*Tests_SRS_IOTHUBCLIENT_LL_10_009: [If messageCallbackType is ASYNC then  IoTHubClient_LL_MessageCallback shall return what messageCallbacEx returns.] */
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallbackEx_calls_client_layer_reports_false)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(messageCallbackEx(testMessage, (void*)11))
+        .SetReturn(false);
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_FALSE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
+    IoTHubClient_LL_Destroy(handle);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_MessageCallback_with_messageCallbackEx_calls_client_layer_fails_disposition_reporting_fails)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetMessageCallback_Ex(handle, messageCallbackEx, (void*)11);
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(get_time(NULL));
+    STRICT_EXPECTED_CALL(messageCallbackEx(testMessage, (void*)11))
+        .SetReturn(false);
+
+    //act
+    bool result = IoTHubClient_LL_MessageCallback(handle, testMessage);
+
+    //assert
+    ASSERT_IS_FALSE(result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    destroy_test_message_info(testMessage);
     IoTHubClient_LL_Destroy(handle);
 }
 
@@ -2289,12 +2732,15 @@ TEST_FUNCTION(IoTHubClient_LL_GetLastMessageReceiveTime_MessagesReceived_succeed
     // arrange
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
     (void)IoTHubClient_LL_SetMessageCallback(handle, test_message_callback_async, (void*)11);
+
+    MESSAGE_CALLBACK_INFO* testMessage = make_test_message_info(TEST_MESSAGE_HANDLE);
     umock_c_reset_all_calls();
 
     STRICT_EXPECTED_CALL(get_time(NULL));
-    STRICT_EXPECTED_CALL(test_message_callback_async((IOTHUB_MESSAGE_HANDLE)1, (void*)11));
+    STRICT_EXPECTED_CALL(test_message_callback_async(testMessage->messageHandle, (void*)11));
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_SendMessageDisposition(testMessage, IOTHUBMESSAGE_ACCEPTED));
 
-    (void)IoTHubClient_LL_MessageCallback(handle, (IOTHUB_MESSAGE_HANDLE)1);
+    (void)IoTHubClient_LL_MessageCallback(handle, testMessage);
 
     // act
     time_t lastMessageReceiveTime = (time_t)0;
@@ -2308,6 +2754,7 @@ TEST_FUNCTION(IoTHubClient_LL_GetLastMessageReceiveTime_MessagesReceived_succeed
 
     ///cleanup
     IoTHubClient_LL_Destroy(handle);
+    destroy_test_message_info(testMessage);
 }
 
 /*** IoTHubClient_LL_GetSendStatus ***/
@@ -3290,6 +3737,7 @@ TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_with_NULL_callback_Unsubsc
 {
     ///arrange
     IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback(handle, deviceMethodCallback, (void*)1);
     umock_c_reset_all_calls();
 
     STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unsubscribe_DeviceMethod(IGNORED_PTR_ARG))
@@ -3300,6 +3748,44 @@ TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_with_NULL_callback_Unsubsc
 
     ///assert
     ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_028: [If the user has subscribed using IoTHubClient_LL_SetDeviceMethodCallback_Ex, IoTHubClient_LL_SetDeviceMethodCallback shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_with_NULL_callback_Unsubscribe_After_SetDeviceMethodCallback_Ex_fail)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback_Ex(handle, iothub_client_inbound_device_method_callback, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_029: [ If deviceMethodCallback is NULL and the client is not subscribed to receive method calls, IoTHubClient_LL_SetDeviceMethodCallback shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_unitialized_with_NULL_callback_fails)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback(NULL, deviceMethodCallback, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback(handle, NULL, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     ///cleanup
@@ -3321,6 +3807,25 @@ TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_with_non_NULL_succeeds)
 
     ///assert
     ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    ///cleanup
+    IoTHubClient_LL_Destroy(handle);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_028: [If the user has subscribed using IoTHubClient_LL_SetDeviceMethodCallback_Ex, IoTHubClient_LL_SetDeviceMethodCallback shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_After_SetDeviceMethodCallback_Ex_fail)
+{
+    ///arrange
+    IOTHUB_CLIENT_LL_HANDLE handle = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback_Ex(handle, iothub_client_inbound_device_method_callback, (void*)1);
+    umock_c_reset_all_calls();
+
+    ///act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback(handle, deviceMethodCallback, (void*)1);
+
+    ///assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     ///cleanup
@@ -3463,6 +3968,26 @@ TEST_FUNCTION(IoTHubClient_LL_DeviceMethodComplete_payload_NULL_succeed)
 
     //assert
     ASSERT_ARE_NOT_EQUAL(int, 0, status);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_DeviceMethodComplete_Async_succeed)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback_Ex(h, iothub_client_inbound_device_method_callback, (void*)1);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(iothub_client_inbound_device_method_callback(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG));
+
+    //act
+    int status = IoTHubClient_LL_DeviceMethodComplete(h, TEST_METHOD_NAME, (const unsigned char*)TEST_STRING_VALUE, strlen(TEST_STRING_VALUE), TEST_METHOD_ID);
+
+    //assert
+    ASSERT_ARE_EQUAL(int, 0, status);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     //cleanup
@@ -3726,6 +4251,8 @@ TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_Ex_inbound_device_method_c
 {
     //arrange
     IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback_Ex(h, iothub_client_inbound_device_method_callback, (void*)1);
+
     umock_c_reset_all_calls();
 
     STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_Unsubscribe_DeviceMethod(IGNORED_PTR_ARG))
@@ -3736,6 +4263,62 @@ TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_Ex_inbound_device_method_c
 
     //assert
     ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_031: [If the user has subscribed using IoTHubClient_LL_SetDeviceMethodCallback, IoTHubClient_LL_SetDeviceMethodCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_Ex_inbound_device_method_cb_NULL_After_SetDeviceMethodCallback_fail)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback(h, deviceMethodCallback, (void*)1);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback_Ex(h, NULL, 0);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_030: [ If deviceMethodCallback is NULL and the client is not subscribed to receive method calls, IoTHubClient_LL_SetDeviceMethodCallback shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_Ex_uninitialized_inbound_device_method_cb_NULL_fails)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback_Ex(h, NULL, 0);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_10_031: [If the user has subscribed using IoTHubClient_LL_SetDeviceMethodCallback, IoTHubClient_LL_SetDeviceMethodCallback_Ex shall fail and return IOTHUB_CLIENT_ERROR. ] */
+TEST_FUNCTION(IoTHubClient_LL_SetDeviceMethodCallback_Ex_After_SetDeviceMethodCallback_fail)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    (void)IoTHubClient_LL_SetDeviceMethodCallback(h, deviceMethodCallback, (void*)1);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetDeviceMethodCallback_Ex(h, iothub_client_inbound_device_method_callback, (void*)1);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     //cleanup
@@ -3796,6 +4379,26 @@ TEST_FUNCTION(IoTHubClient_LL_DeviceMethodResponse_method_id_NULL_fail)
     IoTHubClient_LL_Destroy(h);
 }
 
+/* Tests_SRS_IOTHUBCLIENT_LL_07_026: [ If handle or methodId is NULL then IoTHubClient_LL_DeviceMethodResponse shall return IOTHUB_CLIENT_INVALID_ARG.] */
+TEST_FUNCTION(IoTHubClient_LL_DeviceMethodResponse_IoTHubTransport_DeviceMethod_Response_FAILS_fail)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    STRICT_EXPECTED_CALL(FAKE_IoTHubTransport_DeviceMethod_Response(IGNORED_PTR_ARG, TEST_METHOD_ID, (const unsigned char*)TEST_DEVICE_METHOD_RESPONSE, strlen(TEST_DEVICE_METHOD_RESPONSE), TEST_DEVICE_STATUS_CODE)).SetReturn(__FAILURE__);
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_DeviceMethodResponse(h, TEST_METHOD_ID, (const unsigned char*)TEST_DEVICE_METHOD_RESPONSE, strlen(TEST_DEVICE_METHOD_RESPONSE), TEST_DEVICE_STATUS_CODE);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
 /* Tests_SRS_IOTHUBCLIENT_LL_07_027: [ IoTHubClient_LL_DeviceMethodResponse shall call the IoTHubTransport_DeviceMethod_Response transport function.] */
 TEST_FUNCTION(IoTHubClient_LL_DeviceMethodResponse_succeed)
 {
@@ -3811,6 +4414,170 @@ TEST_FUNCTION(IoTHubClient_LL_DeviceMethodResponse_succeed)
 
     //assert
     ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+
+/* Tests_SRS_IOTHUBCLIENT_LL_25_120: [If iotHubClientHandle, retryPolicy or retryTimeoutLimitinSeconds is NULL, IoTHubClient_LL_GetRetryPolicy shall return IOTHUB_CLIENT_INVALID_ARG ] */
+TEST_FUNCTION(IoTHubClient_LL_GetRetryPolicy_NULL_HANDLEParam_fail)
+{
+    //arrange
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_GetRetryPolicy(NULL, NULL, NULL);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_25_120: [If iotHubClientHandle, retryPolicy or retryTimeoutLimitinSeconds is NULL, IoTHubClient_LL_GetRetryPolicy shall return `IOTHUB_CLIENT_INVALID_ARG ] */
+TEST_FUNCTION(IoTHubClient_LL_GetRetryPolicy_NULL_RetryPolicyParam_fail)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_GetRetryPolicy(h, NULL, NULL);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_25_120: [If iotHubClientHandle, retryPolicy or retryTimeoutLimitinSeconds is NULL, IoTHubClient_LL_GetRetryPolicy shall return `IOTHUB_CLIENT_INVALID_ARG ] */
+TEST_FUNCTION(IoTHubClient_LL_GetRetryPolicy_NULL_SizeParam_fail)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RETRY_POLICY r;
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_GetRetryPolicy(h, &r, NULL);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_INVALID_ARG, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+/* Tests_SRS_IOTHUBCLIENT_LL_25_121: [IoTHubClient_LL_GetRetryPolicy shall retrieve connection retry policy from retryPolicy in struct IOTHUB_CLIENT_LL_HANDLE_DATA] */
+/* Tests_SRS_IOTHUBCLIENT_LL_25_122: [IoTHubClient_LL_GetRetryPolicy shall retrieve retryTimeoutLimit in seconds from retryTimeoutinSeconds in struct IOTHUB_CLIENT_LL_HANDLE_DATA] */
+TEST_FUNCTION(IoTHubClient_LL_GetRetryPolicy_succeed)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+
+    //act
+    IOTHUB_CLIENT_RETRY_POLICY r;
+    size_t s;
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_GetRetryPolicy(h, &r, &s);
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_SetOption_product_info_twice_succeeds)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetOption(h, OPTION_PRODUCT_INFO, "Eight");
+    if (result == IOTHUB_CLIENT_OK)
+    {
+        result = IoTHubClient_LL_SetOption(h, OPTION_PRODUCT_INFO, "Eight");
+    }
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_SetOption_product_info_succeeds)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+
+    //act
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetOption(h, OPTION_PRODUCT_INFO, "Eight");
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_OK, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_SetOption_product_info_fails_case2)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+
+    //act
+    g_fail_platform_get_platform_info = true;
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetOption(h, OPTION_PRODUCT_INFO, "Eight");
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
+    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
+
+    //cleanup
+    IoTHubClient_LL_Destroy(h);
+}
+
+TEST_FUNCTION(IoTHubClient_LL_SetOption_product_info_fails_case1)
+{
+    //arrange
+    IOTHUB_CLIENT_LL_HANDLE h = IoTHubClient_LL_Create(&TEST_CONFIG);
+    umock_c_reset_all_calls();
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(platform_get_platform_info());
+    STRICT_EXPECTED_CALL(STRING_c_str(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(STRING_delete(IGNORED_PTR_ARG));
+
+    //act
+    g_fail_string_construct_sprintf = true;
+    IOTHUB_CLIENT_RESULT result = IoTHubClient_LL_SetOption(h, OPTION_PRODUCT_INFO, "Eight");
+
+    //assert
+    ASSERT_ARE_EQUAL(IOTHUB_CLIENT_RESULT, IOTHUB_CLIENT_ERROR, result);
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
 
     //cleanup

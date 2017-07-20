@@ -4,20 +4,24 @@
 cmake_minimum_required(VERSION 2.8.11)
 project(azure_iot_sdks)
 
-set(IOT_SDK_VERSION 1.1.8)
+set(IOT_SDK_VERSION 1.1.19)
 
 if(POLICY CMP0042)
     cmake_policy(SET CMP0042 NEW)
 endif()
 
 #
-#making a nice global variable to know if we are on linux or not.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+#making a global variable to know if we are on linux, windows, or macosx.
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(WINDOWS TRUE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(LINUX TRUE)
     #on Linux, enable valgrind
     #these commands (MEMORYCHECK...) need to apear BEFORE include(CTest) or they will not have any effect
     find_program(MEMORYCHECK_COMMAND valgrind)
-    set(MEMORYCHECK_COMMAND_OPTIONS "--trace-children=yes --leak-check=full --error-exitcode=1")
+    set(MEMORYCHECK_COMMAND_OPTIONS "--leak-check=full --error-exitcode=1")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(MACOSX TRUE)
 endif()
 
 include (CTest)
@@ -43,12 +47,12 @@ option(use_amqp "set use_amqp to ON if amqp is to be used, set to OFF to not use
 option(use_http "set use_http to ON if http is to be used, set to OFF to not use http" ON)
 option(use_mqtt "set use_mqtt to ON if mqtt is to be used, set to OFF to not use mqtt" ON)
 option(run_e2e_tests "set run_e2e_tests to ON to run e2e tests (default is OFF)" OFF)
-option(use_wsio "set use_wsio to ON if WebSockets is to be used, set to OFF to not use WebSockets" OFF)
 option(run_unittests "set run_unittests to ON to run unittests (default is OFF)" OFF)
 option(run_longhaul_tests "set run_longhaul_tests to ON to run longhaul tests (default is OFF)[if possible, they are always build]" OFF)
 option(skip_samples "set skip_samples to ON to skip building samples (default is OFF)[if possible, they are always build]" OFF)
 option(compileOption_C "passes a string to the command line of the C compiler" OFF)
 option(compileOption_CXX "passes a string to the command line of the C++ compiler" OFF)
+option(build_service_client "controls whether the iothub_service_client is built or not" ON)
 option(build_python "builds the Python native iothub_client module" OFF)
 option(build_javawrapper "builds the native iothub_client library for java C wrapper" OFF)
 option(dont_use_uploadtoblob "set dont_use_uploadtoblob to ON if the functionality of upload to blob is to be excluded, OFF otherwise. It requires HTTP" OFF)
@@ -56,6 +60,7 @@ option(no_logging "disable logging" OFF)
 option(use_installed_dependencies "set use_installed_dependencies to ON to use installed packages instead of building dependencies from submodules" OFF)
 option(use_firmware_update "build the Raspberry PI firmware_update sample" OFF)
 option(build_as_dynamic "build the IoT SDK libaries as dynamic"  OFF)
+option(build_network_e2e "build network E2E tests" OFF)
 
 #Work in progress features
 #=========================
@@ -118,7 +123,9 @@ endif()
 
 include("dependencies.cmake")
 
-if(${run_unittests})
+set_platform_files(${CMAKE_CURRENT_LIST_DIR}/c-utility)
+
+if(${run_unittests} OR ${run_e2e_tests})
     include("dependencies-test.cmake")
 endif()
 
@@ -194,7 +201,16 @@ else()
     set(THREAD_C_FILE ${SHARED_UTIL_ADAPTER_FOLDER}/threadapi_pthreads.c)
 endif()
 
-add_subdirectory(iothub_service_client)
+
+if(NOT ${use_amqp} OR NOT ${use_http})
+    set (build_service_client OFF)
+    message(STATUS "iothub_service_client build is disabled (AMQP and HTTP support are required)")
+endif()
+
+if(${build_service_client})
+    add_subdirectory(iothub_service_client)
+endif()
+
 
 if(${run_e2e_tests} OR ${run_longhaul_tests} OR ${nuget_e2e_tests})
     add_subdirectory(testtools)
@@ -204,7 +220,9 @@ add_subdirectory(iothub_client)
 add_subdirectory(serializer)
 if(NOT "${build_python}" STREQUAL "OFF")
     add_subdirectory(../device/iothub_client_python python)
-    add_subdirectory(../service python_service_client)
+    if(${build_service_client})
+        add_subdirectory(../service python_service_client)
+    endif()
 endif()
 
 if("${build_javawrapper}" STREQUAL "ON")
@@ -212,10 +230,10 @@ if("${build_javawrapper}" STREQUAL "ON")
 endif()
 
 
-if(${use_installed_dependencies})
-    #Set CMAKE_INSTALL_LIBDIR if not defined
-    include(GNUInstallDirs)
+#Set CMAKE_INSTALL_LIBDIR if not defined
+include(GNUInstallDirs)
 
+if(${use_installed_dependencies})
     #Install azure_iot_sdks
     set(package_location "cmake")
 
@@ -247,7 +265,8 @@ if(${use_installed_dependencies})
         DESTINATION
             ${package_location}
     )
+endif()
 
-else()
-    message(WARNING "This package may only be installed when 'use_installed_dependencies' is ON")
+if (${build_network_e2e})
+    add_subdirectory(network_e2e/tests)
 endif()

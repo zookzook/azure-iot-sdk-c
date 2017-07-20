@@ -7,22 +7,22 @@ if(NOT ${use_mqtt})
     message(FATAL_ERROR "iothubclient_mqtt_dt_e2e being generated without MQTT support")
 endif()
 
-compileAsC99()
+compileAsC11()
 set(theseTestsName iothubclient_mqtt_dt_e2e)
 
 set(${theseTestsName}_test_files
-    ${theseTestsName}.cpp
-    ../common_dt_e2e/iothubclient_common_dt_e2e.cpp
+    ${theseTestsName}.c
+    ../common_dt_e2e/iothubclient_common_dt_e2e.c
 )
 
-set(${theseTestsName}_cpp_files
-    ${theseTestsName}.cpp
-    ../common_dt_e2e/iothubclient_common_dt_e2e.cpp
+set(${theseTestsName}_c_files
+    ${theseTestsName}.c
+    ../common_dt_e2e/iothubclient_common_dt_e2e.c
 )
 
-set(${theseTestsName}_nuget_cpp_files
-    ${theseTestsName}.cpp
-    ../common_dt_e2e/iothubclient_common_dt_e2e.cpp
+set(${theseTestsName}_nuget_test_files
+    ${theseTestsName}.c
+    ../common_dt_e2e/iothubclient_common_dt_e2e.c
 )
 
 set(${theseTestsName}_nuget_c_files
@@ -46,8 +46,8 @@ include_directories(../../../certs/)
 include_directories(${IOTHUB_TEST_INC_FOLDER})
 include_directories(${IOTHUB_SERVICE_CLIENT_INC_FOLDER})
 
-file(COPY suppressions.supp DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-build_test_artifacts(${theseTestsName} ON VALGRIND_SUPPRESSIONS_FILE suppressions.supp)
+file(COPY ../global_valgrind_suppression.supp DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+build_c_test_artifacts(${theseTestsName} ON "tests/E2ETests" VALGRIND_SUPPRESSIONS_FILE global_valgrind_suppression.supp)
 
 if(WIN32)
     if(MSVC)
@@ -64,6 +64,7 @@ if(WIN32)
             iothub_client
             iothub_service_client
             iothub_client_mqtt_transport
+            iothub_client_mqtt_ws_transport
             rpcrt4
         )
         linkMqttLibrary(${theseTestsName}_dll)
@@ -76,6 +77,7 @@ if(WIN32)
             iothub_client
             iothub_service_client
             iothub_client_mqtt_transport
+            iothub_client_mqtt_ws_transport
             rpcrt4
         )
         linkMqttLibrary(${theseTestsName}_exe)
@@ -110,6 +112,7 @@ else()
             iothub_service_client
             aziotsharedutil
             iothub_client_mqtt_transport
+            iothub_client_mqtt_ws_transport
         )
         linkMqttLibrary(${theseTestsName}_exe)
     endif()

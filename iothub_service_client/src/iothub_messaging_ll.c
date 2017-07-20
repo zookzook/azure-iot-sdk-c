@@ -660,7 +660,7 @@ static AMQP_VALUE IoTHubMessaging_LL_FeedbackMessageReceived(const void* context
         /*Codes_SRS_IOTHUBMESSAGING_12_058: [ If context is not NULL IoTHubMessaging_LL_FeedbackMessageReceived shall get the content string of the message by calling message_get_body_amqp_data ] */
         /*Codes_SRS_IOTHUBMESSAGING_12_059: [ IoTHubMessaging_LL_FeedbackMessageReceived shall parse the response JSON to IOTHUB_SERVICE_FEEDBACK_BATCH struct ] */
         /*Codes_SRS_IOTHUBMESSAGING_12_060: [ IoTHubMessaging_LL_FeedbackMessageReceived shall use the following parson APIs to parse the response string: json_parse_string, json_value_get_object, json_object_get_string, json_object_dotget_string  ] */
-        if (message_get_body_amqp_data(message, 0, &binary_data) != 0)
+        if (message_get_body_amqp_data_in_place(message, 0, &binary_data) != 0)
         {
             /*Codes_SRS_IOTHUBMESSAGING_12_061: [ If any of the parson API fails, IoTHubMessaging_LL_FeedbackMessageReceived shall return IOTHUB_MESSAGING_INVALID_JSON ] */
             LogError("Cannot get message data");
@@ -1107,6 +1107,8 @@ IOTHUB_MESSAGING_RESULT IoTHubMessaging_LL_Open(IOTHUB_MESSAGING_HANDLE messagin
             {
                 tls_io_config.hostname = messagingHandle->hostname;
                 tls_io_config.port = 5671;
+                tls_io_config.underlying_io_interface = NULL;
+                tls_io_config.underlying_io_parameters = NULL;
 
                 const IO_INTERFACE_DESCRIPTION* tlsio_interface;
 

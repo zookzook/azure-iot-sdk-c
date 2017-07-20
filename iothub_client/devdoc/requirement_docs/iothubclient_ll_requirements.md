@@ -39,6 +39,7 @@ DEFINE_ENUM(IOTHUB_CLIENT_STATUS, IOTHUB_CLIENT_STATUS_VALUES);
     IOTHUB_CLIENT_CONNECTION_BAD_CREDENTIAL,               \
     IOTHUB_CLIENT_CONNECTION_RETRY_EXPIRED,                \
     IOTHUB_CLIENT_CONNECTION_NO_NETWORK,                   \
+    IOTHUB_CLIENT_CONNECTION_COMMUNICATION_ERROR,          \
     IOTHUB_CLIENT_CONNECTION_OK                            \
 
     DEFINE_ENUM(IOTHUB_CLIENT_CONNECTION_STATUS_REASON, IOTHUB_CLIENT_CONNECTION_STATUS_REASON_VALUES);
@@ -185,19 +186,19 @@ extern IOTHUB_CLIENT_LL_HANDLE IoTHubClient_LL_Create(const IOTHUB_CLIENT_CONFIG
 
 **SRS_IOTHUBCLIENT_LL_02_004: [** Otherwise `IoTHubClient_LL_Create` shall initialize a new DLIST (further called "waitingToSend") containing records with fields of the following types: IOTHUB_MESSAGE_HANDLE, IOTHUB_CLIENT_EVENT_CONFIRMATION_CALLBACK, void*.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_006: [** `IoTHubClient_LL_Create` shall populate a structure of type `IOTHUBTRANSPORT_CONFIG` with the information from config parameter and the previous DLIST and shall pass that to the underlying layer _Create function.** ]**
+**SRS_IOTHUBCLIENT_LL_02_006: [** `IoTHubClient_LL_Create` shall populate a structure of type `IOTHUBTRANSPORT_CONFIG` with the information from config parameter and the previous DLIST and shall pass that to the underlying layer `_Create` function.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_007: [** If the underlaying layer _Create function fails them `IoTHubClient_LL_Create` shall fail and return `NULL`.** ]**
+**SRS_IOTHUBCLIENT_LL_02_007: [** If the underlaying layer `_Create` function fails them `IoTHubClient_LL_Create` shall fail and return `NULL`.** ]**
 
 **SRS_IOTHUBCLIENT_LL_17_008: [** `IoTHubClient_LL_Create` shall call the transport _Register function with a populated structure of type `IOTHUB_DEVICE_CONFIG` and waitingToSend list.** ]**
 
-**SRS_IOTHUBCLIENT_LL_17_009: [** If the _Register function fails, this function shall fail and return `NULL`.** ]**
+**SRS_IOTHUBCLIENT_LL_17_009: [** If the `_Register` function fails, this function shall fail and return `NULL`.** ]**
 
 **SRS_IOTHUBCLIENT_LL_02_008: [** Otherwise, `IoTHubClient_LL_Create` shall succeed and return a `non-NULL` handle.** ]** 
 
 **SRS_IOTHUBCLIENT_LL_25_124: [** `IoTHubClient_LL_Create` shall set the default retry policy as Exponential backoff with jitter and if succeed and return a `non-NULL` handle.** ]**
 
-
+**SRS_IOTHUBCLIENT_LL_07_029: [** `IoTHubClient_LL_Create` shall create the Auth module with the device_key, device_id, and/or deviceSasToken values **]**
 
 ## IoTHubClient_LL_CreateWithTransport
 
@@ -262,7 +263,7 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SendEventAsync(IOTHUB_CLIENT_LL_HAND
 
 **SRS_IOTHUBCLIENT_LL_02_012: [** `IoTHubClient_LL_SendEventAsync` shall fail and return `IOTHUB_CLIENT_INVALID_ARG` if parameter `eventConfirmationCallback` is `NULL` and userContextCallback is not `NULL`.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_013: [** `IotHubClient_SendEventAsync` shall add the DLIST waitingToSend a new record cloning the information from `eventMessageHandle`, `eventConfirmationCallback`, `userContextCallback`.** ]**
+**SRS_IOTHUBCLIENT_LL_02_013: [** `IoTHubClient_LL_SendEventAsync` shall add the DLIST waitingToSend a new record cloning the information from `eventMessageHandle`, `eventConfirmationCallback`, `userContextCallback`.** ]**
 
 **SRS_IOTHUBCLIENT_LL_02_014: [** If cloning and/or adding the information fails for any reason, `IoTHubClient_LL_SendEventAsync` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
 
@@ -280,10 +281,13 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetMessageCallback(IOTHUB_CLIENT_LL_
 
 **SRS_IOTHUBCLIENT_LL_02_017: [** If parameter `messageCallback` is `non-NULL` then `IoTHubClient_LL_SetMessageCallback` shall call the underlying layer's _Subscribe function.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_018: [** If the underlying layer's _Subscribe function fails, then `IoTHubClient_LL_SetMessageCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. Otherwise `IoTHubClient_LL_SetMessageCallback` shall succeed and return `IOTHUB_CLIENT_OK`.** ]**
+**SRS_IOTHUBCLIENT_LL_02_018: [** If the underlying layer's `_Subscribe` function fails, then `IoTHubClient_LL_SetMessageCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. Otherwise `IoTHubClient_LL_SetMessageCallback` shall succeed and return `IOTHUB_CLIENT_OK`.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_019: [** If parameter `messageCallback` is `NULL` then `IoTHubClient_LL_SetMessageCallback` shall call the underlying layer's _Unsubscribe function and return `IOTHUB_CLIENT_OK`.** ]** 
+**SRS_IOTHUBCLIENT_LL_02_019: [** If parameter `messageCallback` is `NULL` and the `_SetMessageCallback` had been used to susbscribe for messages, then `IoTHubClient_LL_SetMessageCallback` shall call the underlying layer's _Unsubscribe function and return `IOTHUB_CLIENT_OK`.** ]** 
 
+**SRS_IOTHUBCLIENT_LL_10_010: [** If parameter `messageCallback` is `NULL` and the _SetMessageCallback had not been called to subscribe for messages, then `IoTHubClient_LL_SetMessageCallback` shall fail and return `IOTHUB_CLIENT_ERROR`.** ] **
+
+**SRS_IOTHUBCLIENT_LL_10_011: [** If parameter `messageCallback` is `non-NULL` and the `_SetMessageCallback_Ex` had been used to susbscribe for messages, then `IoTHubClient_LL_SetMessageCallback` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]** 
 
 
 ## IoTHubClient_LL_DoWork
@@ -325,18 +329,52 @@ void IoTHubClient_LL_SendComplete(IOTHUB_CLIENT_LL_HANDLE handle, PDLIST_ENTRY c
 ## IoTHubClient_LL_MessageCallback
 
 ```c
-extern IOTHUBMESSAGE_DISPOSITION_RESULT IoTHubClient_LL_MessageCallback(IOTHUB_CLIENT_LL_HANDLE handle, IOTHUB_MESSAGE_HANDLE message);
+extern IOTHUBMESSAGE_DISPOSITION_RESULT IoTHubClient_LL_MessageCallback(IOTHUB_CLIENT_LL_HANDLE handle, MESSAGE_CALLBACK_INFO* messageData);
 ```
 
 This function is only called by the lower layers upon receiving a message from IoTHub.
-**SRS_IOTHUBCLIENT_LL_02_029: [** If parameter handle is `NULL` then `IoTHubClient_LL_MessageCallback` shall return `IOTHUBMESSAGE_ABANDONED`.** ]**
+**SRS_IOTHUBCLIENT_LL_02_029: [** If either parameter `handle` or `messageData` is `NULL` then `IoTHubClient_LL_MessageCallback` shall return `false`.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_030: [** `IoTHubClient_LL_MessageCallback` shall invoke the last callback function (the parameter `messageCallback` to `IoTHubClient_LL_SetMessageCallback`) passing the message and the passed `userContextCallback`.** ]**
+**SRS_IOTHUBCLIENT_LL_10_004: [** If the client is not subscribed to receive messages then `IoTHubClient_LL_MessageCallback` shall return `false`.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_031: [** Then `IoTHubClient_LL_MessageCallback` shall return what the user function returns.** ]**
+**SRS_IOTHUBCLIENT_LL_02_030: [** If `messageCallbackType` is `LEGACY` then `IoTHubClient_LL_MessageCallback` shall invoke the last callback function (the parameter `messageCallback` to `IoTHubClient_LL_SetMessageCallback`) passing the message and the userContextCallback.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_032: [** If the last callback function was `NULL`, then `IoTHubClient_LL_MessageCallback`  shall return `IOTHUBMESSAGE_ABANDONED`.** ]** 
+**SRS_IOTHUBCLIENT_LL_10_007: [** If `messageCallbackType` is `LEGACY` then `IoTHubClient_LL_MessageCallback` shall send the message disposition as returned by the client to the underlying layer and return `true`.** ]**
 
+**SRS_IOTHUBCLIENT_LL_02_032: [** If `messageCallbackType` is `NONE` then `IoTHubClient_LL_MessageCallback` shall return `false`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_009: [** If `messageCallbackType` is `ASYNC` then `IoTHubClient_LL_MessageCallback` shall return what `messageCallbac_Ex` returns.** ]**
+
+## IoTHubClient_LL_SetMessageCallback_Ex
+
+```c
+extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetMessageCallback_Ex(IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle, IOTHUB_CLIENT_MESSAGE_CALLBACK_ASYNC_EX messageCallback, void* userContextCallback);
+```
+
+**SRS_IOTHUBCLIENT_LL_10_021: [** `IoTHubClient_LL_SetMessageCallback_Ex` shall fail and return `IOTHUB_CLIENT_INVALID_ARG` if parameter `iotHubClientHandle` is `NULL`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_018: [** If parameter `messageCallback` is `NULL` and `IoTHubClient_LL_SetMessageCallback_Ex` had not been used to subscribe for messages, then `IoTHubClient_LL_SetMessageCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_019: [** If parameter `messageCallback` is `NULL` and `IoTHubClient_LL_SetMessageCallback` had been used to subscribe for messages, then `IoTHubClient_LL_SetMessageCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_023: [** If parameter `messageCallback` is `NULL` then `IoTHubClient_LL_SetMessageCallback_Ex` shall call the underlying layer's `_Unsubscribe` function and return `IOTHUB_CLIENT_OK`.** ]** 
+
+**SRS_IOTHUBCLIENT_LL_10_020: [** If parameter `messageCallback` is `non-NULL`, and `IoTHubClient_LL_SetMessageCallback` had been used to subscribe for messages, then `IoTHubClient_LL_SetMessageCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_024: [** If parameter `messageCallback` is `non-NULL` then `IoTHubClient_LL_SetMessageCallback_Ex` shall call the underlying layer's _Subscribe function.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_025: [** If the underlying layer's _Subscribe function fails, then `IoTHubClient_LL_SetMessageCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`. Otherwise `IoTHubClient_LL_SetMessageCallback_Ex` shall succeed and return `IOTHUB_CLIENT_OK`.** ]**
+
+
+## IoTHubClient_LL_SendMessageDisposition
+
+```c
+extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SendMessageDisposition(IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle, MESSAGE_CALLBACK_INFO* messageData, IOTHUBMESSAGE_DISPOSITION_RESULT disposition);
+```
+
+**SRS_IOTHUBCLIENT_LL_10_026: [** `IoTHubClient_LL_SendMessageDisposition` shall fail and return `IOTHUB_CLIENT_INVALID_ARG` if parameter `iotHubClientHandle` is `NULL`.** ]**
+
+**SRS_IOTHUBCLIENT_LL_10_027: [** `IoTHubClient_LL_SendMessageDisposition` shall return the result from calling the underlying layer's `_SendMessageDisposition`.** ]**
 
 
 ## IoTHubClient_LL_GetSendStatus
@@ -359,15 +397,15 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetConnectionStatusCallback(IOTHUB_C
 
 **SRS_IOTHUBCLIENT_LL_25_112: [**IoTHubClient_LL_SetConnectionStatusCallback shall return IOTHUB_CLIENT_OK and save the callback and userContext as a member of the handle.**]**
 
-###IotHubClient_LL_ConnectionStatusCallBack
+###IoTHubClient_LL_ConnectionStatusCallBack
 ```c
-extern void IotHubClient_LL_ConnectionStatusCallBack(IOTHUB_CLIENT_LL_HANDLE handle, IOTHUB_CLIENT_CONNECTION_STATUS connectionStatus, IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason);
+extern void IoTHubClient_LL_ConnectionStatusCallBack(IOTHUB_CLIENT_LL_HANDLE handle, IOTHUB_CLIENT_CONNECTION_STATUS connectionStatus, IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason);
 ```
-**SRS_IOTHUBCLIENT_LL_25_113: [**If parameter connectionStatus is NULL or parameter handle is NULL then IotHubClient_LL_ConnectionStatusCallBack shall return.**]**
+**SRS_IOTHUBCLIENT_LL_25_113: [**If parameter connectionStatus is NULL or parameter handle is NULL then IoTHubClient_LL_ConnectionStatusCallBack shall return.**]**
 
-IotHubClient_LL_ConnectionStatusCallBack is a function that is only called by the lower layers. connectionStatus represents the authentication state of the client to the IOTHUB with reason for change.
+IoTHubClient_LL_ConnectionStatusCallBack is a function that is only called by the lower layers. connectionStatus represents the authentication state of the client to the IOTHUB with reason for change.
 
-**SRS_IOTHUBCLIENT_LL_25_114: [**IotHubClient_LL_ConnectionStatusCallBack shall call non-callback set by the user from IoTHubClient_LL_SetConnectionStatusCallback passing the status, reason and the passed userContextCallback.**]**
+**SRS_IOTHUBCLIENT_LL_25_114: [**IoTHubClient_LL_ConnectionStatusCallBack shall call non-callback set by the user from IoTHubClient_LL_SetConnectionStatusCallback passing the status, reason and the passed userContextCallback.**]**
 
 ###IoTHubClient_LL_SetRetryPolicy
 ```c
@@ -383,13 +421,13 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetRetryPolicy(IOTHUB_CLIENT_LL_HAND
 ```c
 extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_GetRetryPolicy(IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle, IOTHUB_CLIENT_RETRY_POLICY* retryPolicy, size_t* retryTimeoutLimitinSeconds);
 ```
-**SRS_IOTHUBCLIENT_LL_25_120: [**IoTHubClient_LL_GetRetryPolicy shall return IOTHUB_CLIENT_INVALID_ARG if called with NULL iotHubClientHandle or retryPolicy or retryTimeoutLimitinSeconds parameters**]**
+**SRS_IOTHUBCLIENT_LL_25_120: [** If `iotHubClientHandle`, `retryPolicy` or `retryTimeoutLimitinSeconds` is `NULL`, `IoTHubClient_LL_GetRetryPolicy` shall return `IOTHUB_CLIENT_INVALID_ARG` **]**
 
-**SRS_IOTHUBCLIENT_LL_25_121: [**IoTHubClient_LL_GetRetryPolicy shall retrieve connection retry policy from retryPolicy in struct IOTHUB_CLIENT_LL_HANDLE_DATA**]**
+**SRS_IOTHUBCLIENT_LL_25_121: [** `IoTHubClient_LL_GetRetryPolicy` shall retrieve connection retry policy from `retryPolicy` in struct `IOTHUB_CLIENT_LL_HANDLE_DATA`**]**
 
-**SRS_IOTHUBCLIENT_LL_25_122: [**IoTHubClient_LL_GetRetryPolicy shall retrieve retryTimeoutLimit in seconds from retryTimeoutinSeconds in struct IOTHUB_CLIENT_LL_HANDLE_DATA**]**
+**SRS_IOTHUBCLIENT_LL_25_122: [** `IoTHubClient_LL_GetRetryPolicy` shall retrieve `retryTimeoutLimit` in seconds from `retryTimeoutinSeconds` in struct `IOTHUB_CLIENT_LL_HANDLE_DATA`**]**
 
-**SRS_IOTHUBCLIENT_LL_25_123: [**If user did not set the policy and timeout values by calling IoTHubClient_LL_SetRetryPolicy then IoTHubClient_LL_GetRetryPolicy shall return default values**]**
+**SRS_IOTHUBCLIENT_LL_25_123: [** If user did not set the `policy` and `timeout` values by calling `IoTHubClient_LL_SetRetryPolicy` then `IoTHubClient_LL_GetRetryPolicy` shall return default values**]**
 
 
 ## IoTHubClient_LL_GetLastMessageReceiveTime
@@ -424,7 +462,7 @@ IoTHubClient_LL_SetOption sets the runtime option "optionName" to the value poin
 
 ### Options that shall be handled by IoTHubClient_LL:
 
--**SRS_IOTHUBCLIENT_LL_02_039: [** "messageTimeout" - once `IoTHubClient_LL_SendEventAsync` is called the message shall timeout after `*value` miliseconds. value is a pointer to a tickcounter_ms_t.** ]**
+-**SRS_IOTHUBCLIENT_LL_02_039: [** `messageTimeout` - once `IoTHubClient_LL_SendEventAsync` is called the message shall timeout after `*value` miliseconds. value is a pointer to a tickcounter_ms_t.** ]**
 
 -**SRS_IOTHUBCLIENT_LL_02_041: [** If more than \*value miliseconds have passed since the call to `IoTHubClient_LL_SendEventAsync` then the message callback shall be called with a status code of `IOTHUB_CLIENT_CONFIRMATION_TIMEOUT`.** ]**
 
@@ -434,9 +472,19 @@ IoTHubClient_LL_SetOption sets the runtime option "optionName" to the value poin
 
 -**SRS_IOTHUBCLIENT_LL_02_044: [** Messages already delivered to `IoTHubClient_LL` shall not have their timeouts modified by a new call to `IoTHubClient_LL_SetOption`.** ]**
 
+-**SRS_IOTHUBCLIENT_LL_10_032: [** `product_info` - takes a char string as an argument to specify the product information(e.g. `ProductName/ProductVersion`).** ]**
+
+-**SRS_IOTHUBCLIENT_LL_10_033: [** repeat calls with `product_info` will erase the previously set product information if applicatble.** ]**
+
+-**SRS_IOTHUBCLIENT_LL_10_034: [** `product_info` - shall store the given string concatenated with the sdk information and the platform information in the form (ProductInfo DeviceSDKName/DeviceSDKVersion (OSName OSVersion; Architecture).** ]**
+
+-**SRS_IOTHUBCLIENT_LL_10_035: [** If string concatenation fails, `IoTHubClient_LL_SetOption` shall return `IOTHUB_CLIENT_ERRROR`. Otherwise, `IOTHUB_CLIENT_OK` shall be returned.** ]**
+
+-**SRS_IOTHUBCLIENT_LL_12_023: [** `c2d_keep_alive_freq_secs` - shall set the cloud to device keep alive frequency (in seconds) for the connection. Zero means keep alive will not be sent. **]**
+
  **SRS_IOTHUBCLIENT_LL_02_099: [** `IoTHubClient_LL_SetOption` shall return according to the table below  ]**
 
-- | IoTHubClient_UploadToBlob_SetOption   | Transport_SetOption       | Return value
+  | IoTHubClient_UploadToBlob_SetOption   | Transport_SetOption       | Return value
 - |---------------------------------------|---------------------------|
 - | IOTHUB_CLIENT_OK                      | IOTHUB_CLIENT_OK          | IOTHUB_CLIENT_OK                                     
 - | IOTHUB_CLIENT_OK                      | IOTHUB_CLIENT_ERROR       | IOTHUB_CLIENT_ERROR
@@ -476,6 +524,10 @@ step 3: inform IoTHub that the upload has finished.
 
 **SRS_IOTHUBCLIENT_LL_02_067: [** If creating the relativePath fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
 
+**SRS_IOTHUBCLIENT_LL_32_001: [** `IoTHubClient_LL_UploadToBlob` shall create a JSON string formed from "{ \"blobName\": \" + destinationFileName + "\" }". **]**
+
+**SRS_IOTHUBCLIENT_LL_32_002: [** if creating the JSON string fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR` **]**
+
 **SRS_IOTHUBCLIENT_LL_02_068: [** `IoTHubClient_LL_UploadToBlob` shall create an HTTP responseContent BUFFER_HANDLE.** ]**
 
 **SRS_IOTHUBCLIENT_LL_02_069: [** If creating the HTTP response buffer handle fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
@@ -496,15 +548,15 @@ the following HTTP request headers:  ]**
 
 **SRS_IOTHUBCLIENT_LL_02_074: [** If adding "Authorization" fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR`.  ]**
 
-**SRS_IOTHUBCLIENT_LL_02_075: [** `IoTHubClient_LL_UploadToBlob` shall execute `HTTPAPIEX_ExecuteRequest` passing the following information for arguments:  ]**
+**SRS_IOTHUBCLIENT_LL_32_003: [** `IoTHubClient_LL_UploadToBlob` shall execute `HTTPAPIEX_ExecuteRequest` passing the following information for arguments:  ]**
 
 - HTTPAPIEX_HANDLE handle - the handle created at the beginning of `IoTHubClient_LL_UploadToBlob`
-- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_GET
+- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_POST
 - const char* relativePath - the HTTP relative path
 - HTTP_HEADERS_HANDLE requestHttpHeadersHandle - request HTTP headers
-- BUFFER_HANDLE requestContent - NULL
+- BUFFER_HANDLE requestContent - the JSON string containing the file name
 - unsigned int* statusCode - the address of an unsigned int that will contain the HTTP status code
-- HTTP_HEADERS_HANDLE responseHttpHeadersHandl - NULL
+- HTTP_HEADERS_HANDLE responseHttpHeadersHandle - NULL
 - BUFFER_HANDLE responseContent - the HTTP response BUFFER_HANDLE
 
 **SRS_IOTHUBCLIENT_LL_02_076: [** If `HTTPAPIEX_ExecuteRequest` call fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
@@ -519,14 +571,14 @@ the following HTTP request headers:  ]**
 
 **SRS_IOTHUBCLIENT_LL_02_089: [** If creating the `HTTPAPIEX_SAS_HANDLE` fails then `IoTHubClient_LL_UploadToBlob` shall fail and return `IOTHUB_CLIENT_ERROR`.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_090: [** `IoTHubClient_LL_UploadToBlob` shall call `HTTPAPIEX_SAS_ExecuteRequest` passing as arguments:  ]**
+**SRS_IOTHUBCLIENT_LL_32_004: [** `IoTHubClient_LL_UploadToBlob` shall call `HTTPAPIEX_SAS_ExecuteRequest` passing as arguments:  ]**
 
 - HTTPAPIEX_SAS_HANDLE sasHandle - the created HTTPAPIEX_SAS_HANDLE
 - HTTPAPIEX_HANDLE handle - the created HTTPAPIEX_HANDLE
-- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_GET
+- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_POST
 - const char* relativePath - the HTTP relative path
 - HTTP_HEADERS_HANDLE requestHttpHeadersHandle - request HTTP headers
-- BUFFER_HANDLE requestContent - NULL
+- BUFFER_HANDLE requestContent - the JSON string containing the file name
 - unsigned int* statusCode - the address of an unsigned int that will contain the HTTP status code
 - HTTP_HEADERS_HANDLE responseHeadersHandle - NULL
 - BUFFER_HANDLE responseContent - the HTTP response BUFFER_HANDLE
@@ -538,17 +590,19 @@ the following HTTP request headers:  ]**
 If the credentials used to create `iotHubClientHandle` do not have "deviceKey" or "deviceSasToken" then
 **SRS_IOTHUBCLIENT_LL_02_106: [** - `x509certificate` and `x509privatekey` saved options shall be passed on the HTTPAPIEX_SetOption.** ]**
 
+**SRS_IOTHUBCLIENT_LL_02_111: [** If `certificates` is non-`NULL` then `certificates` shall be passed to HTTPAPIEX_SetOption with optionName `TrustedCerts`. **]**
+
 **SRS_IOTHUBCLIENT_LL_02_107: [** - "Authorization" header shall not be build.** ]**
 
-**SRS_IOTHUBCLIENT_LL_02_108: [** `IoTHubClient_LL_UploadToBlob` shall execute HTTPAPIEX_ExecuteRequest passing the following information for arguments:  ]**
+**SRS_IOTHUBCLIENT_LL_32_005: [** `IoTHubClient_LL_UploadToBlob` shall execute HTTPAPIEX_ExecuteRequest passing the following information for arguments:  ]**
 
 - HTTPAPIEX_HANDLE handle - the handle created at the beginning of `IoTHubClient_LL_UploadToBlob`
-- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_GET
+- HTTPAPI_REQUEST_TYPE requestType - HTTPAPI_REQUEST_POST
 - const char* relativePath - the HTTP relative path
 - HTTP_HEADERS_HANDLE requestHttpHeadersHandle - request HTTP headers
-- BUFFER_HANDLE requestContent - NULL
+- BUFFER_HANDLE requestContent - the JSON string containing the file name
 - unsigned int* statusCode - the address of an unsigned int that will contain the HTTP status code
-- HTTP_HEADERS_HANDLE responseHttpHeadersHandl - NULL
+- HTTP_HEADERS_HANDLE responseHttpHeadersHandle - NULL
 - BUFFER_HANDLE responseContent - the HTTP response BUFFER_HANDLE
 
 **SRS_IOTHUBCLIENT_LL_02_081: [** Otherwise, `IoTHubClient_LL_UploadToBlob` shall use parson to extract and save the following information from the response buffer: correlationID and SasUri.** ]**
@@ -703,9 +757,13 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetDeviceMethodCallback(IOTHUB_CLIEN
 
 **SRS_IOTHUBCLIENT_LL_12_018: [** If `deviceMethodCallback` is `NULL`, then `IoTHubClient_LL_SetDeviceMethodCallback` shall call the underlying layer's `IoTHubTransport_Unsubscribe_DeviceMethod` function and return `IOTHUB_CLIENT_OK`. **]**
 
+**SRS_IOTHUBCLIENT_LL_10_029: [** If `deviceMethodCallback` is `NULL` and the client is not subscribed to receive method calls, `IoTHubClient_LL_SetDeviceMethodCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
+
 **SRS_IOTHUBCLIENT_LL_12_019: [** If `deviceMethodCallback` is not `NULL`, then `IoTHubClient_LL_SetDeviceMethodCallback` shall call the underlying layer's `IoTHubTransport_Subscribe_DeviceMethod` function. **]**
 
 **SRS_IOTHUBCLIENT_LL_12_020: [** If the underlying layer's `IoTHubTransport_Subscribe_DeviceMethod` function fails, then `IoTHubClient_LL_SetDeviceMethodCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
+
+**SRS_IOTHUBCLIENT_LL_10_028: [** If the user has subscribed using `IoTHubClient_LL_SetDeviceMethodCallback_Ex`, `IoTHubClient_LL_SetDeviceMethodCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
 
 **SRS_IOTHUBCLIENT_LL_12_021: [** If adding the information fails for any reason, `IoTHubClient_LL_SetDeviceMethodCallback` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
 
@@ -733,7 +791,11 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_LL_SetDeviceMethodCallback_Ex(IOTHUB_CL
 
 **SRS_IOTHUBCLIENT_LL_07_022: [** If `inboundDeviceMethodCallback` is NULL then `IoTHubClient_LL_SetDeviceMethodCallback_Ex` shall call the underlying layer's `IoTHubTransport_Unsubscribe_DeviceMethod` function and return IOTHUB_CLIENT_OK. **]**
 
+**SRS_IOTHUBCLIENT_LL_10_030: [** If `deviceMethodCallback` is `NULL` and the client is not subscribed to receive method calls, `IoTHubClient_LL_SetDeviceMethodCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
+
 **SRS_IOTHUBCLIENT_LL_07_023: [** If `inboundDeviceMethodCallback` is non-NULL then `IoTHubClient_LL_SetDeviceMethodCallback_Ex` shall call the underlying layer's `IoTHubTransport_Subscribe_DeviceMethod` function. **]**
+
+**SRS_IOTHUBCLIENT_LL_10_031: [** If the user has subscribed using `IoTHubClient_LL_SetDeviceMethodCallback`, `IoTHubClient_LL_SetDeviceMethodCallback_Ex` shall fail and return `IOTHUB_CLIENT_ERROR`. **]**
 
 **SRS_IOTHUBCLIENT_LL_07_024: [** If `inboundDeviceMethodCallback` is non-NULL then `IoTHubClient_LL_SetDeviceMethodCallback_Ex` shall set the inboundDeviceMethodCallback to NULL. **]**
 

@@ -9,20 +9,39 @@
 #define RESULT_OK 0
 #define DEFAULT_IOTHUB_AMQP_PORT 5671
 
-static XIO_HANDLE getTLSIOTransport(const char* fqdn)
+static XIO_HANDLE getTLSIOTransport(const char* fqdn, const AMQP_TRANSPORT_PROXY_OPTIONS* amqp_transport_proxy_options)
 {
     XIO_HANDLE result;
     TLSIO_CONFIG tls_io_config;
-    tls_io_config.hostname = fqdn;
-    tls_io_config.port = DEFAULT_IOTHUB_AMQP_PORT;
-    // Codes_SRS_IOTHUBTRANSPORTAMQP_09_002: [getTLSIOTransport shall get `io_interface_description` using platform_get_default_tlsio())]
-    const IO_INTERFACE_DESCRIPTION* io_interface_description = platform_get_default_tlsio();
 
-    // Codes_SRS_IOTHUBTRANSPORTAMQP_09_003: [If `io_interface_description` is NULL getTLSIOTransport shall return NULL.]
-    // Codes_SRS_IOTHUBTRANSPORTAMQP_09_004: [getTLSIOTransport shall return the XIO_HANDLE created using xio_create().]
-    if ((result = xio_create(io_interface_description, &tls_io_config)) == NULL)
+    (void)amqp_transport_proxy_options;
+
+    /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_009: [ `getIoTransportProvider` shall obtain the TLS IO interface handle by calling `platform_get_default_tlsio`. ]*/
+    const IO_INTERFACE_DESCRIPTION* io_interface_description = platform_get_default_tlsio();
+    if (io_interface_description == NULL)
     {
-        LogError("Failed to get the TLS/IO transport (xio_create failed)");
+        LogError("Failed obtaining default TLS IO interface");
+        result = NULL;
+    }
+    else
+    {
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_010: [ The TLS IO parameters shall be a `TLSIO_CONFIG` structure filled as below: ]*/
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_011: [ - `hostname` shall be set to `fqdn`. ]*/
+        tls_io_config.hostname = fqdn;
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_012: [ - `port` shall be set to 443. ]*/
+        tls_io_config.port = DEFAULT_IOTHUB_AMQP_PORT;
+
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_013: [ `underlying_io_interface` shall be set to NULL. ]*/
+        tls_io_config.underlying_io_interface = NULL;
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_01_014: [ `underlying_io_parameters` shall be set to NULL. ]*/
+        tls_io_config.underlying_io_parameters = NULL;
+
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_09_003: [If `platform_get_default_tlsio` returns NULL `getTLSIOTransport` shall return NULL.] */
+        /* Codes_SRS_IOTHUBTRANSPORTAMQP_09_004: [`getTLSIOTransport` shall return the `XIO_HANDLE` created using `xio_create`.] */
+        if ((result = xio_create(io_interface_description, &tls_io_config)) == NULL)
+        {
+            LogError("Failed to get the TLS/IO transport (xio_create failed)");
+        }
     }
 
     return result;
@@ -120,6 +139,7 @@ static void IoTHubTransportAMQP_Destroy(TRANSPORT_LL_HANDLE handle)
 
 static int IoTHubTransportAMQP_SetRetryPolicy(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIENT_RETRY_POLICY retryPolicy, size_t retryTimeoutLimitInSeconds)
 {
+    // Codes_SRS_IOTHUBTRANSPORTAMQP_09_020: [IoTHubTransportAMQP_SetRetryPolicy shall call into the IoTHubTransport_AMQP_Common_SetRetryPolicy().]
     return IoTHubTransport_AMQP_Common_SetRetryPolicy(handle, retryPolicy, retryTimeoutLimitInSeconds);
 }
 
@@ -129,8 +149,15 @@ static STRING_HANDLE IoTHubTransportAMQP_GetHostname(TRANSPORT_LL_HANDLE handle)
     return IoTHubTransport_AMQP_Common_GetHostname(handle);
 }
 
+static IOTHUB_CLIENT_RESULT IoTHubTransportAMQP_SendMessageDisposition(MESSAGE_CALLBACK_INFO* message_data, IOTHUBMESSAGE_DISPOSITION_RESULT disposition)
+{
+    // Codes_SRS_IOTHUBTRANSPORTAMQP_10_001: [IoTHubTransportAMQP_SendMessageDisposition shall send the message disposition by calling into the IoTHubTransport_AMQP_Common_SendMessageDispostion().]
+    return IoTHubTransport_AMQP_Common_SendMessageDisposition(message_data, disposition);
+}
+
 static TRANSPORT_PROVIDER thisTransportProvider = 
 {
+    IoTHubTransportAMQP_SendMessageDisposition,     /*pfIotHubTransport_Send_Message_Disposition IoTHubTransport_Send_Message_Disposition;*/
     IoTHubTransportAMQP_Subscribe_DeviceMethod,     /*pfIoTHubTransport_Subscribe_DeviceMethod IoTHubTransport_Subscribe_DeviceMethod;*/
     IoTHubTransportAMQP_Unsubscribe_DeviceMethod,   /*pfIoTHubTransport_Unsubscribe_DeviceMethod IoTHubTransport_Unsubscribe_DeviceMethod;*/
     IoTHubTransportAMQP_DeviceMethod_Response,
@@ -151,6 +178,7 @@ static TRANSPORT_PROVIDER thisTransportProvider =
 };
 
 /* Codes_SRS_IOTHUBTRANSPORTAMQP_09_019: [This function shall return a pointer to a structure of type TRANSPORT_PROVIDER having the following values for it's fields:
+IoTHubTransport_SendMessageDisposition = IoTHubTransportAMQP_SendMessageDisposition
 IoTHubTransport_Subscribe_DeviceMethod = IoTHubTransportAMQP_Subscribe_DeviceMethod
 IoTHubTransport_Unsubscribe_DeviceMethod = IoTHubTransportAMQP_Unsubscribe_DeviceMethod
 IoTHubTransport_Subscribe_DeviceTwin = IoTHubTransportAMQP_Subscribe_DeviceTwin
@@ -162,6 +190,7 @@ IoTHubTransport_Destroy = IoTHubTransportAMQP_Destroy
 IoTHubTransport_Subscribe = IoTHubTransportAMQP_Subscribe
 IoTHubTransport_Unsubscribe = IoTHubTransportAMQP_Unsubscribe
 IoTHubTransport_DoWork = IoTHubTransportAMQP_DoWork
+IoTHubTransport_SetRetryPolicy = IoTHubTransportAMQP_SetRetryPolicy
 IoTHubTransport_SetOption = IoTHubTransportAMQP_SetOption]*/
 extern const TRANSPORT_PROVIDER* AMQP_Protocol(void)
 {

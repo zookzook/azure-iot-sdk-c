@@ -11,7 +11,7 @@ function(linkUAMQP whatExecutableIsBuilding)
 
         target_link_libraries(${whatExecutableIsBuilding} uamqp aziotsharedutil ws2_32 secur32)
 
-        if(${use_openssl} OR ${use_wsio})
+        if(${use_openssl})
             target_link_libraries(${whatExecutableIsBuilding} $ENV{OpenSSLDir}/lib/ssleay32.lib $ENV{OpenSSLDir}/lib/libeay32.lib)
         
             file(COPY $ENV{OpenSSLDir}/bin/libeay32.dll DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/Debug)
@@ -22,10 +22,6 @@ function(linkUAMQP whatExecutableIsBuilding)
         endif()
     else()
         target_link_libraries(${whatExecutableIsBuilding} uamqp aziotsharedutil ${OPENSSL_LIBRARIES})
-    endif()
-    
-    if(${use_wsio})
-        target_link_libraries(${whatExecutableIsBuilding} websockets)
     endif()
 endfunction(linkUAMQP)
 
@@ -55,12 +51,18 @@ function(linkHttp whatExecutableIsBuilding)
     endif()
 endfunction(linkHttp)
 
-function(linkWebSockets whatExecutableIsBuilding)
-    if(${use_wsio})
-        target_link_libraries(${whatExecutableIsBuilding} websockets)
-    endif()
-endfunction(linkWebSockets)
-
 function(linkSharedUtil whatIsBuilding)
     target_link_libraries(${whatIsBuilding} aziotsharedutil)
 endfunction(linkSharedUtil)
+
+function(add_unittest_directory test_directory)
+    if (${run_unittests})
+        add_subdirectory(${test_directory})
+    endif()
+endfunction()
+
+function(add_e2etest_directory test_directory)
+    if (${run_e2e_tests} OR ${nuget_e2e_tests})
+        add_subdirectory(${test_directory})
+    endif()
+endfunction()

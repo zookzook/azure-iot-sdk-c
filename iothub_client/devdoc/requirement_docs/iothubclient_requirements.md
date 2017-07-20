@@ -198,9 +198,9 @@ extern IOTHUB_CLIENT_RESULT IoTHubClient_SetMessageCallback(IOTHUB_CLIENT_HANDLE
 
 **SRS_IOTHUBCLIENT_01_016: [** If `iotHubClientHandle` is `NULL`, `IoTHubClient_SetMessageCallback` shall return `IOTHUB_CLIENT_INVALID_ARG`. **]**
 
-**SRS_IOTHUBCLIENT_01_017: [** `IoTHubClient_SetMessageCallback` shall call `IoTHubClient_LL_SetMessageCallback`, while passing the `IoTHubClient_LL` handle created by `IoTHubClient_Create` and the parameters `messageCallback` and `userContextCallback`. **]**
+**SRS_IOTHUBCLIENT_01_017: [** `IoTHubClient_SetMessageCallback` shall call `IoTHubClient_LL_SetMessageCallbackEx`, while passing the `IoTHubClient_LL` handle created by `IoTHubClient_Create` and the local `iothub_ll_message_callback` wrapper of `messageCallback` and `userContextCallback`. **]**
 
-**SRS_IOTHUBCLIENT_01_018: [** When `IoTHubClient_LL_SetMessageCallback` is called, `IoTHubClient_SetMessageCallback` shall return the result of `IoTHubClient_LL_SetMessageCallback`. **]**
+**SRS_IOTHUBCLIENT_01_018: [** When `IoTHubClient_LL_SetMessageCallbackEx` is called, `IoTHubClient_SetMessageCallback` shall return the result of `IoTHubClient_LL_SetMessageCallbackEx`. **]**
 
 **SRS_IOTHUBCLIENT_01_027: [** `IoTHubClient_SetMessageCallback` shall be made thread-safe by using the lock created in `IoTHubClient_Create`. **]**
 
@@ -335,7 +335,7 @@ IoTHubClient_SetOption allows run-time changing of settings of the IoTHubClient.
 
 **SRS_IOTHUBCLIENT_01_041: [** `IoTHubClient_SetOption` shall be made thread-safe by using the lock created in `IoTHubClient_Create`. **]**
 
-**SRS_IOTHUBCLIENT_01_042: [** If acquiring the lock fails, `IoTHubClient_GetLastMessageReceiveTime` shall return `IOTHUB_CLIENT_ERROR`. **]**
+**SRS_IOTHUBCLIENT_01_042: [** If acquiring the lock fails, `IoTHubClient_SetOption` shall return `IOTHUB_CLIENT_ERROR`. **]**
 
 Options handled by IoTHubClient_SetOption:
 -none.

@@ -63,7 +63,7 @@ If you are considering porting the device client SDK for C to a new platform, ch
 
 ## Contribution, feedback and issues
 
-If you encounter any bugs, have suggestions for new features or if you would like to become an active contributor to this project please follow the instructions provided in the [contribution guidelines](CONTRIBUTING.md).
+If you encounter any bugs, have suggestions for new features or if you would like to become an active contributor to this project please follow the instructions provided in the [contribution guidelines](.github/CONTRIBUTING.md).
 
 ## Support
 
@@ -144,6 +144,32 @@ Contains tools that are currently used in testing the client libraries: Mocking 
 
 Miscellaneous tools: compilembed, mbed_build, traceabilitytool (checks spec requirements vs code implementation).
 
+# Long Term Support
+
+The project offers a Long Term Support (LTS) version to allow users that do not need the latest features to be shielded from unwanted changes.
+
+A new LTS version will be created every 6 months. The lifetime of an LTS branch is currently planned for one year. LTS branches receive all bug fixes that fall in one of these categories:
+
+- security bugfixes
+- critical bugfixes (crashes, memory leaks, etc.)
+
+No new features or improvements will be picked up in an LTS branch.
+
+LTS branches are named lts_*mm*_*yyyy*, where *mm* and *yyyy* are the month and year when the branch was created. An example of such a branch is *lts_07_2017*.
+
+## Schedule<sup>1</sup>
+
+Below is a table showing the mapping of the LTS branches to the packages released
+
+| Package | Github Branch | LTS Status | LTS Start Date | Maintenance End Date | Removed Date |
+| :-----------: | :-----------: | :--------: | :------------: | :------------------: | :----------: |
+| 1.x.x         | lts_07_2017   | Active     | 2017-07-01     | 2017-12-31           | 2018-06-30   |
+
+* <sup>1</sup> All scheduled dates are subject to change by the Azure IoT SDK team.
+
+### Planned Release Schedule
+![](./lts_branches.png)
+
 ---
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
@@ -154,4 +180,4 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 [c-sdk-intro]: https://azure.microsoft.com/documentation/articles/iot-hub-device-sdk-c-intro/
 [c-porting-guide]: doc/porting_guide.md
 [c-cross-compile]: doc/SDK_cross_compile_example.md
-[c-api-reference]: http://azure.github.io/azure-iot-sdks/c/api_reference/index.html
+[c-api-reference]: https://azure.github.io/azure-iot-sdk-c/index.html

@@ -4,8 +4,8 @@
 #ifndef AZUREIOTPROTOCOLMQTT_H
 #define AZUREIOTPROTOCOLMQTT_H
 
-#include "azure_umqtt_c\mqtt_client.h"
+#include "azure_umqtt_c/mqtt_client.h"
 
-#define AzureIoTProtocolMQTTVersion "1.0.21"
+#define AzureIoTProtocolMQTTVersion "1.0.37"
 
 #endif //AZUREIOTPROTOCOLMQTT_H

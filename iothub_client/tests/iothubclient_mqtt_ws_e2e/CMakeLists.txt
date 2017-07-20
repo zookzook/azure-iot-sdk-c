@@ -7,10 +7,6 @@ if(NOT (${use_amqp} AND ${use_mqtt}))
     message(FATAL_ERROR "iothubclient_mqtt_ws_e2e being generated without AMQP and MQTT support")
 endif()
 
-if(NOT (${use_wsio}))
-   message(FATAL_ERROR "iothubclient_mqtt_ws_e2e being generated without WebSockets support")
-endif()
-
 compileAsC11()
 set(theseTestsName iothubclient_mqtt_ws_e2e)
 
@@ -37,8 +33,8 @@ include_directories(../common_e2e)
 include_directories(${IOTHUB_TEST_INC_FOLDER})
 include_directories(${IOTHUB_SERVICE_CLIENT_INC_FOLDER})
 
-file(COPY suppressions.supp DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-build_c_test_artifacts(${theseTestsName} ON "tests/E2ETests" VALGRIND_SUPPRESSIONS_FILE suppressions.supp)
+file(COPY ../global_valgrind_suppression.supp DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+build_c_test_artifacts(${theseTestsName} ON "tests/E2ETests" VALGRIND_SUPPRESSIONS_FILE global_valgrind_suppression.supp)
 
 if(WIN32)
     if(TARGET ${theseTestsName}_dll)
@@ -64,7 +60,7 @@ if(WIN32)
             aziotsharedutil
             rpcrt4
         )
-        linkSharedUtil(${theseTestsName}_dll)
+        linkSharedUtil(${theseTestsName}_exe)
         linkUAMQP(${theseTestsName}_exe)
         linkMqttLibrary(${theseTestsName}_exe)
     endif()
@@ -77,6 +73,18 @@ if(WIN32)
         )
     endif()
 else()
+    if(UNIX) #LINUX OR APPLE
+        find_package(PkgConfig REQUIRED)
+        pkg_search_module(UUID REQUIRED uuid)
+        link_directories(${UUID_LIBRARY_DIRS})
+    endif()
+
+    if(APPLE)
+        target_link_libraries(${theseTestsName}_exe -L${UUID_LIBRARY_DIRS} pthread ${UUID_LIBRARIES})
+    elseif(LINUX)
+        target_link_libraries(${theseTestsName}_exe pthread ${UUID_LIBRARIES})
+    endif()
+
     if(TARGET ${theseTestsName}_exe)
         target_link_libraries(${theseTestsName}_exe
             iothub_test
@@ -85,8 +93,8 @@ else()
             iothub_service_client
             aziotsharedutil
         )
-        target_link_libraries(${theseTestsName}_exe pthread uuid)
-        linkSharedUtil(${theseTestsName}_dll)
+        target_link_libraries(${theseTestsName}_exe)
+        linkSharedUtil(${theseTestsName}_exe)
         linkUAMQP(${theseTestsName}_exe)
         linkMqttLibrary(${theseTestsName}_exe)
     endif()

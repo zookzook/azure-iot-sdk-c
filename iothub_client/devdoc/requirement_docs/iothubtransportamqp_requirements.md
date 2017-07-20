@@ -20,6 +20,7 @@ static const TRANSPORT_PROVIDER* AMQP_Protocol(void);
 ```
   The following static functions are provided in the fields of the TRANSPORT_PROVIDER structure:
 
+    - IoTHubTransportAMQP_SendMessageDisposition,
     - IoTHubTransportAMQP_Subscribe_DeviceMethod,
     - IoTHubTransportAMQP_Unsubscribe_DeviceMethod,
     - IoTHubTransportAMQP_Subscribe_DeviceTwin,
@@ -34,7 +35,7 @@ static const TRANSPORT_PROVIDER* AMQP_Protocol(void);
     - IoTHubTransportAMQP_Subscribe,
     - IoTHubTransportAMQP_Unsubscribe,
     - IoTHubTransportAMQP_DoWork,
-    - IoTHubTransportAMQP_SetRetryLogic,
+    - IoTHubTransportAMQP_SetRetryPolicy,
     - IoTHubTransportAMQP_GetSendStatus
 
 
@@ -51,11 +52,23 @@ static TRANSPORT_LL_HANDLE IoTHubTransportAMQP_Create(const IOTHUBTRANSPORT_CONF
 ### getTLSIOTransport
 
 ```c
-static XIO_HANDLE getTLSIOTransport(const char* fqdn)
+static XIO_HANDLE getTLSIOTransport(const char* fqdn, const AMQP_TRANSPORT_PROXY_OPTIONS* amqp_transport_proxy_options)
 ```
-**SRS_IOTHUBTRANSPORTAMQP_09_002: [**getTLSIOTransport shall get `io_interface_description` using platform_get_default_tlsio())**]**
-**SRS_IOTHUBTRANSPORTAMQP_09_003: [**If `io_interface_description` is NULL getTLSIOTransport shall return NULL.**]**
-**SRS_IOTHUBTRANSPORTAMQP_09_004: [**getTLSIOTransport shall return the XIO_HANDLE created using xio_create().**]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_009: [** `getIoTransportProvider` shall obtain the TLS IO interface handle by calling `platform_get_default_tlsio`. **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_010: [** The TLS IO parameters shall be a `TLSIO_CONFIG` structure filled as below: **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_011: [** - `hostname` shall be set to `fqdn`. **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_012: [** - `port` shall be set to 5671. **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_013: [** `underlying_io_interface` shall be set to NULL. **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_01_014: [** `underlying_io_parameters` shall be set to NULL. **]**
+
+**SRS_IOTHUBTRANSPORTAMQP_09_003: [**If `platform_get_default_tlsio` returns NULL `getTLSIOTransport` shall return NULL.**]**
+**SRS_IOTHUBTRANSPORTAMQP_09_004: [**`getTLSIOTransport` shall return the `XIO_HANDLE` created using `xio_create`.**]**
 
 
 ## IoTHubTransportAMQP_Destroy
@@ -184,6 +197,22 @@ static STRING_HANDLE IoTHubTransportAMQP_GetHostname(TRANSPORT_LL_HANDLE handle)
 **SRS_IOTHUBTRANSPORTAMQP_09_018: [**IoTHubTransportAMQP_GetHostname shall get the hostname by calling into the IoTHubTransport_AMQP_Common_GetHostname()**]**
 
 
+## IoTHubTransportAMQP_SetRetryPolicy
+
+```c
+static int IoTHubTransportAMQP_SetRetryPolicy(TRANSPORT_LL_HANDLE handle, IOTHUB_CLIENT_RETRY_POLICY retryPolicy, size_t retryTimeoutLimitInSeconds)
+```
+
+**SRS_IOTHUBTRANSPORTAMQP_09_020: [**IoTHubTransportAMQP_SetRetryPolicy shall call into the IoTHubTransport_AMQP_Common_SetRetryPolicy()**]**
+
+
+## IoTHubTransportAMQP_SendMessageDisposition
+```c
+IOTHUB_CLIENT_RESULT IoTHubTransportAMQP_SendMessageDisposition(MESSAGE_CALLBACK_INFO* messageData, IOTHUBMESSAGE_DISPOSITION_RESULT disposition);
+```
+
+**SRS_IOTHUBTRANSPORTAMQP_10_001: [**IoTHubTransportAMQP_SendMessageDisposition shall send the message disposition by calling into the IoTHubTransport_AMQP_Common_SendMessageDisposition()**]**
+
 ### AMQP_Protocol
 
 ```c
@@ -191,6 +220,7 @@ const TRANSPORT_PROVIDER* AMQP_Protocol(void)
 ```
 
 **SRS_IOTHUBTRANSPORTAMQP_09_019: [**This function shall return a pointer to a structure of type TRANSPORT_PROVIDER having the following values for it's fields:
+IoTHubTransport_SendMessageDisposition = IoTHubTransportAMQP_SendMessageDisposition
 IoTHubTransport_Subscribe_DeviceMethod = IoTHubTransportAMQP_Subscribe_DeviceMethod
 IoTHubTransport_Unsubscribe_DeviceMethod = IoTHubTransportAMQP_Unsubscribe_DeviceMethod
 IoTHubTransport_Subscribe_DeviceTwin = IoTHubTransportAMQP_Subscribe_DeviceTwin
@@ -202,5 +232,5 @@ IoTHubTransport_Destroy = IoTHubTransportAMQP_Destroy
 IoTHubTransport_Subscribe = IoTHubTransportAMQP_Subscribe
 IoTHubTransport_Unsubscribe = IoTHubTransportAMQP_Unsubscribe
 IoTHubTransport_DoWork = IoTHubTransportAMQP_DoWork
-IoTHubTransport_SetRetryLogic = IoTHubTransportAMQP_SetRetryLogic
+IoTHubTransport_SetRetryPolicy = IoTHubTransportAMQP_SetRetryPolicy
 IoTHubTransport_SetOption = IoTHubTransportAMQP_SetOption**]**

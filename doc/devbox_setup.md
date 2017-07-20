@@ -23,7 +23,7 @@ This document describes how to prepare your development environment to use the *
 
 - Clone the latest release of SDK to your local machine using the tag name you found:
   ```
-  git clone -b <yyyy-dd-mm> --recursive https://github.com/Azure/azure-iot-sdk-c.git
+  git clone -b <yyyy-mm-dd> --recursive https://github.com/Azure/azure-iot-sdk-c.git
   ```
 
   > The `--recursive` argument instructs git to clone other GitHub repos this SDK depends on. Dependencies are listed [here](https://github.com/Azure/azure-iot-sdk-c/blob/master/.gitmodules).
@@ -75,29 +75,15 @@ If project generation completes successfully, you should see a Visual Studio sol
 ### Build a sample that uses WebSocket
 **iothub_client_sample_amqp_websockets** (AMQP over WebSocket) depends on [OpenSSL] libraries **ssleay32** and **libeay32**. You need to build and install these libraries and DLLs before you build the sample that uses them.
 
-Below are steps to build and install OpenSSL libraries and corresponding DLLs. These steps were tested with **openssl-1.0.2j.tar.gz**.
+Below are steps to build and install OpenSSL libraries and corresponding DLLs. These steps were tested with **openssl-1.0.2k**.
 
-1. Download and extract the available tar.gz file from [OpenSSL Downloads] to your Windows machine.
+1. Go to the [OpenSSL Github Repository] and clone the release [git clone https://github.com/openssl/openssl.git -b OpenSSL_1_0_2k]
 
 2. For more details on supported configurations, prerequisites, and build steps read [OpenSSL Installation] and [Compilation and Installation].
 
-3. For x86 configuration, open "VS2015 x86 Native Tools Command Prompt" and enter the following commands:
-   ```
-   perl Configure VC-WIN32 no-asm
-   ms\do_ms
-   ```
+3. For x86 configuration, open "VS2015 x86 Native Tools Command Prompt" and follow the commands in the `INSTALL.W32` file.
 
-4. For x64 configuration, open "VS2015 x64 Native Tools Command Prompt" and enter the following commands:
-   ```
-   perl Configure VC-WIN64A no-asm
-   ms\do_win64a
-   ```
-
-5. Build and install the libraries at your install location using the following commands:
-   ```
-   nmake -f ms\ntdll.mak
-   nmake -f ms\nt.mak install
-   ```
+4. For x64 configuration, open "VS2015 x64 Native Tools Command Prompt" and following commands in the `INSTALL.W64` file.
 
 After completing the above steps make sure OpenSSL libraries and DLLs are in your OpenSSL install location.
 
@@ -116,7 +102,7 @@ Follow these steps to build the sample:
    cd azure-iot-sdk-c
    mkdir cmake
    cd cmake
-   cmake -Duse_wsio=ON -G "Visual Studio 14 2015" ..
+   cmake -G "Visual Studio 14 2015" ..
    cmake --build . -- /m /p:Configuration=Release
    ```
 
@@ -150,7 +136,7 @@ This section describes how to set up a development environment for the C SDK on 
 
 - Clone the latest release of SDK to your local machine using the tag name you found:
   ```
-  git clone -b <yyyy-dd-mm> --recursive https://github.com/Azure/azure-iot-sdk-c.git
+  git clone -b <yyyy-mm-dd> --recursive https://github.com/Azure/azure-iot-sdk-c.git
   ```
   > The `--recursive` argument instructs git to clone other GitHub repos this SDK depends on. Dependencies are listed [here](https://github.com/Azure/azure-iot-sdk-c/blob/master/.gitmodules).
 
@@ -205,7 +191,7 @@ We've tested the device SDK for C on macOS Sierra, with XCode version 8.
 
 - Clone the latest release of SDK to your local machine using the tag name you found:
   ```
-  git clone -b <yyyy-dd-mm> --recursive https://github.com/Azure/azure-iot-sdk-c.git
+  git clone -b <yyyy-mm-dd> --recursive https://github.com/Azure/azure-iot-sdk-c.git
   ```
   > The `--recursive` argument instructs git to clone other GitHub repos this SDK depends on. Dependencies are listed [here](https://github.com/Azure/azure-iot-sdk-c/blob/master/.gitmodules).
 
@@ -255,7 +241,7 @@ To build the SDK:
 
 - Clone the latest release of SDK to your local machine using the tag name you found:
   ```
-  git clone -b <yyyy-dd-mm> --recursive https://github.com/Azure/azure-iot-sdk-c.git
+  git clone -b <yyyy-mm-dd> --recursive https://github.com/Azure/azure-iot-sdk-c.git
   ```
 
   > The `--recursive` argument instructs git to clone other GitHub repos this SDK depends on. Dependencies are listed [here](https://github.com/Azure/azure-iot-sdk-c/blob/master/.gitmodules).
@@ -310,7 +296,7 @@ This repository contains various C sample applications that illustrate how to us
 [CMake]:https://cmake.org/
 [MSBuild]:https://msdn.microsoft.com/en-us/library/0k6kkbsd.aspx
 [OpenSSL]:https://www.openssl.org/
-[OpenSSL Downloads]: https://www.openssl.org/source/
+[OpenSSL Repository]: https://github.com/openssl/openssl
 [OpenSSL Installation]:https://github.com/openssl/openssl/blob/master/INSTALL
 [Compilation and Installation]:https://wiki.openssl.org/index.php/Compilation_and_Installation#Windows
 [Ubuntu]:http://www.ubuntu.com/desktop

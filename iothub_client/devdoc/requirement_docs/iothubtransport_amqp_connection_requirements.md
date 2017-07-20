@@ -86,6 +86,9 @@ AMQP_CONNECTION_HANDLE amqp_connection_create(AMQP_CONNECTION_CONFIG* config);
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_019: [**amqp_connection_create() shall use the `instance->sasl_io` as the `connection_underlying_io`**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_020: [**connection_create2() shall also receive `on_connection_state_changed` and `on_connection_error` callback functions**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_021: [**If connection_create2() fails, amqp_connection_create() shall fail and return NULL**]**
+
+**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_074: [**If connection_set_idle_timeout() fails, amqp_connection_create() shall fail and return NULL**]**
+
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_023: [**The connection tracing shall be set using connection_set_trace(), passing `instance->is_trace_on`**]**
 
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_024: [**`instance->session_handle` shall be created using session_create(), passing `instance->connection_handle`**]**
@@ -95,9 +98,9 @@ AMQP_CONNECTION_HANDLE amqp_connection_create(AMQP_CONNECTION_CONFIG* config);
 
 ### Creating the CBS instance
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_028: [**Only if `config->create_cbs_connection` is true, amqp_connection_create() shall create and open the CBS_HANDLE**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_029: [**`instance->cbs_handle` shall be created using cbs_create(), passing `instance->session_handle` and `on_cbs_state_changed` callback**]**
+**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_029: [**`instance->cbs_handle` shall be created using cbs_create()**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_030: [**If cbs_create() fails, amqp_connection_create() shall fail and return NULL**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_031: [**`instance->cbs_handle` shall be opened using cbs_open()**]**
+**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_031: [**`instance->cbs_handle` shall be opened using `cbs_open_async`**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_032: [**If cbs_open() fails, amqp_connection_create() shall fail and return NULL**]**
 
 ### General
@@ -105,16 +108,10 @@ AMQP_CONNECTION_HANDLE amqp_connection_create(AMQP_CONNECTION_CONFIG* config);
 
 
 #### on_connection_state_changed
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_063: [**If `on_connection_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous**]**
+**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_063: [**If `on_connection_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_064: [**If `on_connection_state_changed` new state is CONNECTION_STATE_OPENED, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_OPENED**]**
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_065: [**If `on_connection_state_changed` new state is CONNECTION_STATE_END, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_CLOSED**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_071: [**If `on_connection_state_changed` new state is CONNECTION_STATE_ERROR, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_ERROR**]**
-
-#### on_cbs_state_changed
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_068: [**If `on_cbs_state_changed` is called back, `instance->on_state_changed_callback` shall be invoked, if defined, only if the new state is different than the previous**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_069: [**If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_OPEN, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_OPENED**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_070: [**If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_IDLE, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_CLOSED**]**
-**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_073: [**If `on_cbs_state_changed` new state is AMQP_MANAGEMENT_STATE_ERROR, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_ERROR**]**
+**SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_071: [**If `on_connection_state_changed` new state is CONNECTION_STATE_ERROR or CONNECTION_STATE_DISCARDING, `instance->on_state_changed_callback` shall be invoked with state AMQP_CONNECTION_STATE_ERROR**]**
 
 #### on_connection_error
 **SRS_IOTHUBTRANSPORT_AMQP_CONNECTION_09_022: [**If the connection calls back with an I/O error, `instance->on_state_changed_callback` shall be invoked if set passing code AMQP_CONNECTION_STATE_ERROR and `instance->on_state_changed_context`**]**

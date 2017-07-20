@@ -27,7 +27,6 @@ static char propText[1024];
 #define MESSAGE_COUNT       5
 #define DOWORK_LOOP_NUM     3
 
-
 typedef struct EVENT_INSTANCE_TAG
 {
     IOTHUB_MESSAGE_HANDLE messageHandle;
@@ -108,7 +107,7 @@ static IOTHUBMESSAGE_DISPOSITION_RESULT ReceiveMessageCallback(IOTHUB_MESSAGE_HA
         }
     }
 
-	if (size == (strlen("quit") * sizeof(char)) && memcmp(buffer, "quit", size) == 0)
+    if (size == (strlen("quit") * sizeof(char)) && memcmp(buffer, "quit", size) == 0)
     {
         g_continueRunning = false;
     }
@@ -156,6 +155,10 @@ void iothub_client_sample_amqp_run(void)
         {
             bool traceOn = true;
             IoTHubClient_LL_SetOption(iotHubClientHandle, "logtrace", &traceOn);
+
+            // Set keep alive is optional. If it is not set the default (240 secs) will be used. If it is zero the service won't send keep alive messages.
+            uint32_t c2d_keep_alive_freq_secs = 120;
+            IoTHubClient_LL_SetOption(iotHubClientHandle, "c2d_keep_alive_freq_secs", &c2d_keep_alive_freq_secs);
 
 #ifdef MBED_BUILD_TIMESTAMP
             // For mbed add the certificate information
