@@ -80,6 +80,7 @@ uint32 user_rf_cal_sector_set(void)
 *******************************************************************************/
 void user_init(void)
 {
+    uart_div_modify(0, UART_CLK_FREQ / 115200);
     printf("SDK version:%s\n", system_get_sdk_version());
 }
 
