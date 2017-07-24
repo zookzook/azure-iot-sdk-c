@@ -32,8 +32,6 @@ DEFINES += -I $(sdk)/c-utility/inc  \
 -I $(sdk)/parson \
 -I $(sdk)/iothub_client/samples/iothub_client_sample_mqtt
 
-# __STDC_VERSION__ is needed to enable stdbool.h in crt_abstractions.h
-DEFINES += -D__STDC_VERSION__=199901L
 # CONFIG_FREERTOS_HZ is the device tick rate
 DEFINES += -DCONFIG_FREERTOS_HZ=100
 
