@@ -1,5 +1,5 @@
 if [ "$#" -ne 2 ]; then
-    echo "usage is copy_iot_files.sh <src_dir> <dest_dir>"
+    echo "usage is copy_iot_lib_files.sh <src_dir> <dest_dir>"
     exit 1 
 fi
 
@@ -60,10 +60,9 @@ $1/c-utility/adapters/sntp_lwip.c	\
 $1/c-utility/adapters/dns_async.c	\
 $1/c-utility/adapters/socket_async.c	\
 $1/c-utility/adapters/tlsio_openssl_compact.c	\
-$1/iothub_client/samples/iothub_client_sample_mqtt/iothub_client_sample_mqtt.c	\
 )
 
-echo "Source files destination:" $2
+echo "Azure IoT library source files destination:" $2
 for each_file in ${COMPONENT_OBJS[*]}; do
     echo copying $each_file
     cp $each_file $2

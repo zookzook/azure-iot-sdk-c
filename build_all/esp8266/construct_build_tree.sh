@@ -39,10 +39,18 @@ else
     exit 1
 fi
 
-# Now copy the necessary Azure IoT SDK files
-if $1/build_all/esp8266/copy_iot_files.sh $1 $BUILD_SOURCES_DIR
-    then echo "Azure IoT source files copied"
+# Copy the necessary Azure IoT SDK library files
+if $1/build_all/esp8266/copy_iot_lib_files.sh $1 $BUILD_SOURCES_DIR
+    then echo "Azure IoT library source files copied"
 else 
-    echo "!!!FAILED!!! Azure IoT source files copy failed"
+    echo "!!!FAILED!!! Azure IoT library source files copy failed"
+    exit 1
+fi
+
+# Copy the necessary Azure IoT SDK library files
+if $1/build_all/esp8266/copy_iot_sample_files.sh $1 $BUILD_USER_DIR
+    then echo "Azure IoT sample files copied"
+else 
+    echo "!!!FAILED!!! Azure IoT sample files copy failed"
     exit 1
 fi
