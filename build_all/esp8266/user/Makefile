@@ -1,3 +1,4 @@
+sdk := $(AZURE_SDK)
 
 #############################################################
 # Required variables for each makefile
@@ -23,7 +24,13 @@ endif
 #   makefile at its root level - these are then overridden
 #   for a subtree within the makefile rooted therein
 #
-#DEFINES += 
+DEFINES += -I $(sdk)/c-utility/inc  \
+-I $(sdk)/c-utility/inc/azure_c_shared_utility/lwip \
+-I $(sdk)/iothub_client/inc \
+-I $(sdk)/umqtt/inc \
+-I $(sdk)/umqtt/inc/azure_umqtt_c \
+-I $(sdk)/parson \
+-I $(sdk)/iothub_client/samples/iothub_client_sample_mqtt
 
 #############################################################
 # Recursion Magic - Don't touch this!!
