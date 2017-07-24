@@ -2,9 +2,12 @@
 if [ $(hostname) = "Purl2" ]; then
     export ESP8266_TOOLS="/c/Users/RoyS/Documents/AzureIoT/workspace/esp-open-sdk" 
     export ESP8266_RTOS_SDK="/c/Users/RoyS/Documents/AzureIoT/workspace/ESP8266_RTOS_SDK" 
-else
+elif [ $(hostname) = "JoeMorello" ]; then
     export ESP8266_TOOLS="/home/roys/workspace/esp-open-sdk" 
     export ESP8266_RTOS_SDK="/home/roys/workspace/ESP8266_RTOS_SDK" 
+else
+	echo "!!! FAILED !!! non-production exports in build.sh"
+	exit 1
 fi
 
 
@@ -32,7 +35,7 @@ export SDK_PATH=$ESP8266_RTOS_SDK
 export BIN_PATH=$BINARY_DIR
 export PATH=$ESP8266_TOOLS/xtensa-lx106-elf/bin:$PATH
 cd $PROJECT_DIR
-if make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=QIO SPI_SIZE_MAP=0
+if make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=QIO SPI_SIZE_MAP=6
     then echo "Build succeeded!"
 else
     echo "Build failed during make process"
