@@ -75,9 +75,10 @@ LINKFLAGS_eagle.app.v6 = \
 	-lphy	\
 	-lpp	\
 	-lpwm	\
+	-lmbedtls               \
+    -lopenssl               \
 	-lsmartconfig	\
 	-lspiffs	\
-	-lssl	\
 	-lwpa	\
 	-lwps		\
 	$(DEP_LIBS_eagle.app.v6)					\
@@ -101,7 +102,8 @@ DEPENDS_eagle.app.v6 = \
 #	-DTXRX_TXBUF_DEBUG
 #	-DTXRX_RXBUF_DEBUG
 #	-DWLAN_CONFIG_CCX
-CONFIGURATION_DEFINES =	-DICACHE_FLASH
+CONFIGURATION_DEFINES =	-DICACHE_FLASH -D__STDC_NO_ATOMICS__=1 -DESP8266_RTOS -D__STDC_VERSION__=201112L -DFREERTOS_ARCH_ESP8266 
+#-DNO_LOGGING=1
 
 DEFINES +=				\
 	$(UNIVERSAL_TARGET_DEFINES)	\
