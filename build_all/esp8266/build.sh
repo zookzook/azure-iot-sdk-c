@@ -35,7 +35,7 @@ export SDK_PATH=$ESP8266_RTOS_SDK
 export BIN_PATH=$BINARY_DIR
 export PATH=$ESP8266_TOOLS/xtensa-lx106-elf/bin:$PATH
 cd $PROJECT_DIR
-if make BOOT=none APP=0 SPI_SPEED=40 SPI_MODE=QIO SPI_SIZE_MAP=6
+if make BOOT=new APP=1 SPI_SPEED=40 SPI_MODE=QIO SPI_SIZE_MAP=6
     then echo "Build succeeded!"
 else
     echo "Build failed during make process"

@@ -58,7 +58,7 @@ LINKFLAGS_eagle.app.v6 = \
     -u call_user_start	\
 	-Wl,-static						\
 	-Wl,--start-group					\
-	-lcirom \
+	-lcirom_stripped \
 	-lcrypto	\
 	-lespconn	\
 	-lespnow	\
