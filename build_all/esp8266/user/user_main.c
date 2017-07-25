@@ -114,40 +114,18 @@ LOCAL void ICACHE_FLASH_ATTR wait_for_connection_ready(uint8 flag)
     }
 }
 
-LOCAL void ICACHE_FLASH_ATTR configWiFi()
+LOCAL void ICACHE_FLASH_ATTR startWiFi()
 {
-    uint8 ssid[] = { 'B','e','l','l','a','C','o','d','e','2','.','4','G' };
-    uint8 password[] = { 'p','a','s','s','w','o','r','d','o','r','d' };
-
-
-    struct station_config sta_conf;
-    wifi_set_opmode(STATION_MODE);
-    memset(sta_conf.ssid, 0, 32);
-    memset(sta_conf.password, 0, 64);
-    memset(sta_conf.bssid, 0, 6);
-    memcpy(sta_conf.ssid, ssid, sizeof(ssid));
-    memcpy(sta_conf.password, password, sizeof(password));
-    sta_conf.bssid_set = 0;
-    wifi_station_set_config(&sta_conf);
-
-    os_timer_disarm(&timer);
-    os_timer_setfn(&timer, (os_timer_func_t *)wait_for_connection_ready, NULL);
-    os_timer_arm(&timer, 2000, 0);
-}
-
-LOCAL void ICACHE_FLASH_ATTR startWiFi(const char* ssid, const char* password)
-{
-    uint8 ssid[] = { 's','s','i','d' };
-    uint8 password[] = { 'p','a','s','s','w','o','r','d' };
-
+    int ssidLen = strlen(WIFI_SSID);
+    int passwordLen = strlen(WIFI_PASSWORD);
 
     struct station_config sta_conf;
     wifi_set_opmode(STATION_MODE);
     memset(sta_conf.ssid, 0, sizeof(sta_conf.ssid));
     memset(sta_conf.password, 0, sizeof(sta_conf.password));
     memset(sta_conf.bssid, 0, sizeof(sta_conf.bssid));
-    memcpy(sta_conf.ssid, ssid, sizeof(ssid));
-    memcpy(sta_conf.password, password, sizeof(password));
+    memcpy(sta_conf.ssid, WIFI_SSID, ssidLen);
+    memcpy(sta_conf.password, WIFI_PASSWORD, passwordLen);
     sta_conf.bssid_set = 0;
     // We don't want to save wifi params to flash each time, we boot,
     // so wifi_station_set_config_current is used instead of wifi_station_set_config.
@@ -155,12 +133,24 @@ LOCAL void ICACHE_FLASH_ATTR startWiFi(const char* ssid, const char* password)
     wifi_station_set_config_current(&sta_conf);
 }
 
+LOCAL void ICACHE_FLASH_ATTR configWiFi()
+{
+    startWiFi();
+
+    os_timer_disarm(&timer);
+    os_timer_setfn(&timer, (os_timer_func_t *)wait_for_connection_ready, NULL);
+    os_timer_arm(&timer, 2000, 0);
+}
+ 
+/*
+
 LOCAL void ICACHE_FLASH_ATTR start_azure_iot()
 {
     // configWiFi kicks off the process of connecting to the AP when 
     // called from outside a task
 
 }
+*/
 
 // This is the entry point for the ESP8266 to launch the user task.
 void user_init(void)
@@ -173,5 +163,5 @@ void user_init(void)
     printf("Waiting for baud change\n");
     printf("Waiting for baud change\n");
     printf("ESP8266 RTOS SDK version:%s\n", system_get_sdk_version());
-    start_azure_iot();
+    configWiFi();
 }
