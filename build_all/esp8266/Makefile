@@ -77,7 +77,6 @@ LINKFLAGS_eagle.app.v6 = \
 	-lpwm	\
 	-lmbedtls               \
     -lopenssl               \
-	-lsmartconfig	\
 	-lspiffs	\
 	-lwpa	\
 	-lwps		\
