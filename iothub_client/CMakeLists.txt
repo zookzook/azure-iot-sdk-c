@@ -319,14 +319,17 @@ IF(WIN32)
     add_definitions(-DGB_MEASURE_MEMORY_FOR_THIS -DGB_DEBUG_ALLOC)
 ENDIF(WIN32)
 
-add_library(iothub_client_dll SHARED
-    ${iothub_client_c_files} 
-    ${iothub_client_h_files}
-    ./src/iothub_client.def
-)
-target_link_libraries(iothub_client_dll ${iothub_client_libs})
-if(NOT WIN32)
-set_target_properties(iothub_client_dll PROPERTIES OUTPUT_NAME "iothub_client")
+if (NOT IOS)
+	add_library(iothub_client_dll SHARED
+		${iothub_client_c_files} 
+		${iothub_client_h_files}
+		./src/iothub_client.def
+	)
+	target_link_libraries(iothub_client_dll ${iothub_client_libs})
+endif(NOT IOS)
+
+if(NOT WIN32 AND NOT IOS)
+	set_target_properties(iothub_client_dll PROPERTIES OUTPUT_NAME "iothub_client")
 endif()
 
 add_library(iothub_client
@@ -342,20 +345,20 @@ set(iothub_client_libs
 )
 # Don't build samples under Win32 ARM for now
 if(NOT ${skip_samples})
-if(WIN32)
-# Build samples for WEC 2013 for both ARM and x86 processsor types
-  if(WINCE) 
-    add_subdirectory(samples)
-  else()
-    if (NOT ${ARCHITECTURE} STREQUAL "ARM")
-    add_subdirectory(samples)
-    endif()
-  endif()
-    
-else()
-    add_subdirectory(samples)
-endif()
-endif()
+	if(WIN32)
+	# Build samples for WEC 2013 for both ARM and x86 processsor types
+	  if(WINCE) 
+		add_subdirectory(samples)
+	  else()
+		if (NOT ${ARCHITECTURE} STREQUAL "ARM")
+			add_subdirectory(samples)
+		endif()
+	endif()
+		
+	else()
+		add_subdirectory(samples)
+	endif()
+endif(NOT ${skip_samples})
 
 if(NOT IN_OPENWRT)
     # Disable tests for OpenWRT
