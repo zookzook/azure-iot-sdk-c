@@ -53,10 +53,12 @@ IF(WIN32)
 	add_definitions(-DGB_MEASURE_MEMORY_FOR_THIS -DGB_DEBUG_ALLOC)
 ENDIF(WIN32)
 
+message("Dynamic=${build_as_dynamic}")
+
 if (${build_as_dynamic})
     add_library(iothub_service_client SHARED ${iothub_service_client_c_files} ${iothub_service_client_h_files} ./src/iothub_service_client.def)
     linkSharedUtil(iothub_service_client)
-
+	message("Set up for dynamic")
 else()
     add_library(iothub_service_client ${iothub_service_client_c_files} ${iothub_service_client_h_files})
 endif()
@@ -98,6 +100,7 @@ if(${use_installed_dependencies})
     )
     install(FILES ${iothub_service_client_h_files} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot)
 else()
+message("Ready to install")
 	set(install_staticlibs
 		iothub_service_client
 	)

@@ -29,12 +29,12 @@ add_executable(devicetwin_simplesample ${devicetwin_simplesample_c_files} ${devi
 target_link_libraries(devicetwin_simplesample serializer iothub_client)
 
 if(${use_amqp})
-	target_link_libraries(devicetwin_simplesample iothub_client_amqp_transport)
+	target_link_libraries(devicetwin_simplesample iothub_client_amqp_transport uamqp)
 	linkUAMQP(devicetwin_simplesample)
 endif()
 
 if(${use_mqtt})
-	target_link_libraries(devicetwin_simplesample iothub_client_mqtt_transport)
+	target_link_libraries(devicetwin_simplesample iothub_client_mqtt_transport umqtt)
 endif()
 
 linkSharedUtil(devicetwin_simplesample)

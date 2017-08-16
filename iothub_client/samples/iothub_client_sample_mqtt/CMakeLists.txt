@@ -30,5 +30,7 @@ add_executable(iothub_client_sample_mqtt ${iothub_client_sample_mqtt_c_files} ${
 target_link_libraries(iothub_client_sample_mqtt  
     iothub_client_mqtt_transport
     iothub_client 
+	aziotsharedutil
+	umqtt
 )
 

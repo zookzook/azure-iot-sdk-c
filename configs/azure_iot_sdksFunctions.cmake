@@ -25,6 +25,15 @@ function(linkUAMQP whatExecutableIsBuilding)
     endif()
 endfunction(linkUAMQP)
 
+function(includeAmqp)
+	include_directories(${UAMQP_INC_FOLDER})
+endfunction(includeAmqp)
+
+function(linkAmqpLibrary whatExecutableIsBuilding)
+    includeAmqp()
+    target_link_libraries(${whatExecutableIsBuilding} uamqp)
+endfunction(linkAmqpLibrary)
+
 function(includeMqtt)
     include_directories(${MQTT_INC_FOLDER})
 endfunction(includeMqtt)

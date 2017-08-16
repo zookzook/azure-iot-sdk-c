@@ -127,10 +127,7 @@ if(${use_amqp})
         ./inc/iothubtransport_amqp_cbs_auth.h
         ./inc/iothubtransport_amqp_connection.h
         ./inc/iothubtransport_amqp_telemetry_messenger.h
-        ./inc/iothubtransport_amqp_twin_messenger.h
-        ./inc/iothubtransport_amqp_messenger.h
         ./inc/iothub_client_retry_control.h
-        ./inc/message_queue.h
         ./inc/uamqp_messaging.h
     )
 
@@ -180,27 +177,23 @@ if(${use_mqtt})
     set(iothub_client_mqtt_ws_transport_c_files
         ${iothub_client_ll_transport_c_files}
         ./src/iothubtransport_mqtt_common.c
-        ./src/iothub_client_retry_control.c
         ./src/iothubtransportmqtt_websockets.c
     )
     set(iothub_client_mqtt_ws_transport_h_files
         ${iothub_client_ll_transport_h_files}
         ./inc/iothubtransport_mqtt_common.h
-        ./inc/iothub_client_retry_control.h
         ./inc/iothubtransportmqtt_websockets.h
     )
 
     set(iothub_client_mqtt_transport_c_files
         ${iothub_client_ll_transport_c_files}
         ./src/iothubtransport_mqtt_common.c
-        ./src/iothub_client_retry_control.c
         ./src/iothubtransportmqtt.c
     )
     
     set(iothub_client_mqtt_transport_h_files
         ${iothub_client_ll_transport_h_files}
         ./inc/iothubtransport_mqtt_common.h
-        ./inc/iothub_client_retry_control.h
         ./inc/iothubtransportmqtt.h
     )
     
@@ -255,67 +248,112 @@ ENDIF(WIN32)
 
 if(${use_http})
     include_directories(${IOTHUB_CLIENT_HTTP_TRANSPORT_INC_FOLDER})
-    add_library(iothub_client_http_transport 
-        ${iothub_client_http_transport_c_files} 
-        ${iothub_client_http_transport_h_files}
-    )
-    linkSharedUtil(iothub_client_http_transport)
+	
+	if (${build_as_dynamic})
+		add_library(iothub_client_http_transport SHARED
+			${iothub_client_http_transport_c_files} 
+			${iothub_client_http_transport_h_files}
+		)
+		linkSharedUtil(iothub_client_http_transport)
+	else()
+		add_library(iothub_client_http_transport SHARED
+			${iothub_client_http_transport_c_files} 
+			${iothub_client_http_transport_h_files}
+		)
+	endif(${build_as_dynamic})
+	
     set(iothub_client_libs
         ${iothub_client_libs}
         iothub_client_http_transport
     )
-endif()
+endif(${use_http})
 
 if(${use_amqp})
     include_directories(${UAMQP_INCLUDES})
     include_directories(${IOTHUB_CLIENT_AMQP_TRANSPORT_INC_FOLDER} ${UAMQP_INC_FOLDER})
-    add_library(iothub_client_amqp_transport 
-        ${iothub_client_amqp_transport_c_files} 
-        ${iothub_client_amqp_transport_h_files}
-    )
-    linkSharedUtil(iothub_client_amqp_transport)
+
+	if (${build_as_dynamic})
+		add_library(iothub_client_amqp_transport SHARED
+			${iothub_client_amqp_transport_c_files} 
+			${iothub_client_amqp_transport_h_files}
+			./src/iothub_client_amqp_transport.def
+		)
+		linkSharedUtil(iothub_client_amqp_transport)
+		linkAmqpLibrary(iothub_client_amqp_transport)
+
+		add_library(iothub_client_amqp_ws_transport SHARED
+			${iothub_client_amqp_ws_transport_c_files} 
+			${iothub_client_amqp_ws_transport_h_files}
+			./src/iothub_client_amqp_transport.def
+		)
+		linkSharedUtil(iothub_client_amqp_ws_transport)
+		linkAmqpLibrary(iothub_client_amqp_ws_transport)
+	else()
+		add_library(iothub_client_amqp_transport 
+			${iothub_client_amqp_transport_c_files} 
+			${iothub_client_amqp_transport_h_files}
+		)
+		add_library(iothub_client_amqp_ws_transport 
+			${iothub_client_amqp_ws_transport_c_files} 
+			${iothub_client_amqp_ws_transport_h_files}
+		)
+	endif (${build_as_dynamic})
+	
+    include_directories(${iothub_client_amqp_ws_transport_INC_FOLDER} ${UAMQP_INC_FOLDER})
+
     set(iothub_client_libs
         ${iothub_client_libs}
         iothub_client_amqp_transport
     )
     
-    include_directories(${iothub_client_amqp_ws_transport_INC_FOLDER} ${UAMQP_INC_FOLDER})
-    add_library(iothub_client_amqp_ws_transport 
-        ${iothub_client_amqp_ws_transport_c_files} 
-        ${iothub_client_amqp_ws_transport_h_files}
-    )
-    linkSharedUtil(iothub_client_amqp_ws_transport)
     set(iothub_client_libs
         ${iothub_client_libs}
         iothub_client_amqp_ws_transport
     )
-endif()
+endif(${use_amqp})
 
 if(${use_mqtt})
     include_directories(${UMQTT_INCLUDES})
     include_directories(${IOTHUB_CLIENT_MQTT_TRANSPORT_INC_FOLDER} ${MQTT_INC_FOLDER})
-    add_library(iothub_client_mqtt_transport 
-        ${iothub_client_mqtt_transport_c_files} 
-        ${iothub_client_mqtt_transport_h_files}
-    )
-    linkSharedUtil(iothub_client_mqtt_transport)
-    linkMqttLibrary(iothub_client_mqtt_transport)
+	
+	if (${build_as_dynamic})
+		add_library(iothub_client_mqtt_transport SHARED
+			${iothub_client_mqtt_transport_c_files} 
+			${iothub_client_mqtt_transport_h_files}
+			./src/iothub_client_mqtt_transport.def
+		)
+		linkSharedUtil(iothub_client_mqtt_transport)
+		linkMqttLibrary(iothub_client_mqtt_transport)
+		
+		add_library(iothub_client_mqtt_ws_transport SHARED
+			${iothub_client_mqtt_ws_transport_c_files} 
+			${iothub_client_mqtt_ws_transport_h_files}
+			./src/iothub_client_mqtt_ws_transport.def
+		)
+		linkSharedUtil(iothub_client_mqtt_ws_transport)
+		linkMqttLibrary(iothub_client_mqtt_ws_transport)
+	else ()
+		add_library(iothub_client_mqtt_transport 
+			${iothub_client_mqtt_transport_c_files} 
+			${iothub_client_mqtt_transport_h_files}
+		)
+		add_library(iothub_client_mqtt_ws_transport 
+			${iothub_client_mqtt_ws_transport_c_files} 
+			${iothub_client_mqtt_ws_transport_h_files}
+		)
+	endif (${build_as_dynamic})
+	
+    include_directories(${IOTHUB_CLIENT_MQTT_TRANSPORT_INC_FOLDER} ${MQTT_INC_FOLDER})
+
     set(iothub_client_libs
         ${iothub_client_libs}
         iothub_client_mqtt_transport
-    )
-    include_directories(${IOTHUB_CLIENT_MQTT_TRANSPORT_INC_FOLDER} ${MQTT_INC_FOLDER})
-    add_library(iothub_client_mqtt_ws_transport 
-        ${iothub_client_mqtt_ws_transport_c_files} 
-        ${iothub_client_mqtt_ws_transport_h_files}
-    )
-    linkSharedUtil(iothub_client_mqtt_ws_transport)
-    linkMqttLibrary(iothub_client_mqtt_ws_transport)
+	)
     set(iothub_client_libs
         ${iothub_client_libs}
         iothub_client_mqtt_ws_transport
     )
-endif()
+endif(${use_mqtt})
 
 include_directories(${IOTHUB_CLIENT_INC_FOLDER})
 
@@ -325,23 +363,28 @@ IF(WIN32)
     add_definitions(-DGB_MEASURE_MEMORY_FOR_THIS -DGB_DEBUG_ALLOC)
 ENDIF(WIN32)
 
-add_library(iothub_client_dll SHARED
-    ${iothub_client_c_files} 
-    ${iothub_client_h_files}
-    ./src/iothub_client.def
-)
-target_link_libraries(iothub_client_dll ${iothub_client_libs})
-if(NOT WIN32)
-set_target_properties(iothub_client_dll PROPERTIES OUTPUT_NAME "iothub_client")
-endif()
+if (${build_as_dynamic})
+	add_library(iothub_client SHARED
+		${iothub_client_c_files} 
+		${iothub_client_h_files}
+		./src/iothub_client.def
+	)
+	linkSharedUtil(iothub_client)
+else ()
+	add_library(iothub_client
+		${iothub_client_c_files} 
+		${iothub_client_h_files}
+	)
+endif (${build_as_dynamic})
 
-add_library(iothub_client
-    ${iothub_client_c_files} 
-    ${iothub_client_h_files}
-)
+# target_link_libraries(iothub_client_dll ${iothub_client_libs})
+
+#if(NOT WIN32)
+#set_target_properties(iothub_client_dll PROPERTIES OUTPUT_NAME "iothub_client")
+#endif()
+
 target_link_libraries(iothub_client ${iothub_client_libs})
 
-linkSharedUtil(iothub_client)
 set(iothub_client_libs
     iothub_client 
     ${iothub_client_libs}
@@ -371,14 +414,12 @@ if(NOT IN_OPENWRT)
 endif()
 
 if(${use_installed_dependencies})
+    #Set CMAKE_INSTALL_LIBDIR if not defined
+    include(GNUInstallDirs)
 
     if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
         set(CMAKE_INSTALL_LIBDIR "lib")
     endif()
-
-    if(NOT DEFINED CMAKE_INSTALL_INCLUDEDIR)    
-        set(CMAKE_INSTALL_INCLUDEDIR "include") 
-    endif()                                     
 
     install(TARGETS ${iothub_client_libs} EXPORT azure_iot_sdksTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

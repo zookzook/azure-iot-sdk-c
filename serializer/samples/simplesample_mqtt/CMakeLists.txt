@@ -37,4 +37,6 @@ target_link_libraries(simplesample_mqtt
 	iothub_client_mqtt_transport
 	serializer 
 	iothub_client
-	)
+	aziotsharedutil
+	umqtt
+)
