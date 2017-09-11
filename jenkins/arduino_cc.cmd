@@ -6,7 +6,7 @@ setlocal
 set build-root=%~dp0..\..
 rem // resolve to fully qualified path
 for %%i in ("%build-root%") do set build-root=%%~fi
-
+echo %build-root%
 REM -- C --
 rem D:\jenkins\workspace\arduino_huzzah_pal\sdk\build_all\arduino_cc
 cd %build-root%\build_all\arduino_cc
