@@ -37,6 +37,7 @@ set (IOS True)
 
 # Required as of cmake 2.8.10
 set (CMAKE_OSX_DEPLOYMENT_TARGET "" CACHE STRING "Force unset of the deployment target for iOS" FORCE)
+set (use_openssl "OFF" CACHE STRING "Force no SSL library for iOS" FORCE)
 
 # Determine the cmake host system version so we know where to find the iOS SDKs
 find_program (CMAKE_UNAME uname /bin /usr/bin /usr/local/bin)
@@ -111,12 +112,14 @@ if (${simulator_build})
 	# set (SIMULATOR True)
 	set (IOS_PLATFORM_LOCATION "iPhoneSimulator.platform")
 	set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-iphonesimulator")
-    set (IOS_ARCH i386 x86_64)
+    # set (IOS_ARCH i386 x86_64)
 else (${simulator_build})
 	set (IOS_PLATFORM_LOCATION "iPhoneOS.platform")
 	set (CMAKE_XCODE_EFFECTIVE_PLATFORMS "-iphoneos")
-    set (IOS_ARCH armv7s arm64)
+    # set (IOS_ARCH armv7s arm64)
 endif (${simulator_build})
+
+set (IOS_ARCH i386 x86_64 armv7 armv7s arm64)
 	
 # Setup iOS developer location unless specified manually with CMAKE_IOS_DEVELOPER_ROOT
 # Note Xcode 4.3 changed the installation location, choose the most recent one available
