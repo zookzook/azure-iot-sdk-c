@@ -273,6 +273,7 @@ if(${use_amqp})
     include_directories(${IOTHUB_CLIENT_AMQP_TRANSPORT_INC_FOLDER} ${UAMQP_INC_FOLDER})
 
 	if (${build_as_dynamic})
+message("Building dynamic AMQP")
 		add_library(iothub_client_amqp_transport SHARED
 			${iothub_client_amqp_transport_c_files} 
 			${iothub_client_amqp_transport_h_files}
@@ -429,6 +430,7 @@ if(${use_installed_dependencies})
     )
     install(FILES ${iothub_client_h_install_files} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot)
 else()
+	set_target_properties(${install_staticlibs} PROPERTIES SOVERSION 1 VERSION 1.0.18)
     install(FILES ${iothub_client_h_install_files} 
 		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot)
 	install(TARGETS ${install_staticlibs} 
