@@ -57,6 +57,7 @@ function(linkHttp whatExecutableIsBuilding)
 endfunction(linkHttp)
 
 function(linkSharedUtil whatIsBuilding)
+	message("adding shared util to ${whatIsBuilding}")
     target_link_libraries(${whatIsBuilding} aziotsharedutil)
 endfunction(linkSharedUtil)
 

@@ -5,6 +5,17 @@ cmake_minimum_required(VERSION 2.8.11)
 project(azure_iot_sdks)
 
 set(IOT_SDK_VERSION 1.1.25)
+set(CMAKE_MATCH_3 "")
+string(REGEX MATCH "^([0-9]+)[.]([0-9]+)[.]([0-9]+)" temp "${IOT_SDK_VERSION}")
+
+if (CMAKE_MATCH_3)
+	set (IOT_SDK_VERSION_MAJOR "${CMAKE_MATCH_1}")
+	set (IOT_SDK_VERSION_MINOR "${CMAKE_MATCH_2}")
+	set (IOT_SDK_VERSION_FIX "${CMAKE_MATCH_3}")
+	message (STATUS "Major=${IOT_SDK_VERSION_MAJOR} Minor=${IOT_SDK_VERSION_MINOR} Fix=${IOT_SDK_VERSION_FIX}")
+else()
+	message(FATAL_ERROR "Unable to determine the version of the SDK")
+endif()
 
 if(POLICY CMP0042)
     cmake_policy(SET CMP0042 NEW)
