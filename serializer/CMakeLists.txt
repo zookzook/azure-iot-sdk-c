@@ -72,16 +72,27 @@ IF(WIN32)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 ENDIF(WIN32)
 
+add_library(serializer_obj OBJECT ${serializer_c_files} ${serializer_h_files})
+
 if (${build_as_dynamic})
-    add_library(
-    serializer SHARED ${serializer_c_files} ${serializer_h_files} ./src/serializer.def
-    )
-    linkSharedUtil(serializer)
-else()
-    add_library(
-    serializer ${serializer_c_files} ${serializer_h_files} 
+    add_library(serializer_dll SHARED ./src/serializer.def $<TARGET_OBJECTS:serializer_obj>)
+    
+    linkSharedUtil(serializer_dll)
+	set_target_properties(serializer_dll PROPERTIES 
+		OUTPUT_NAME "serializer"
+		VERSION ${IOT_SDK_VERSION}
+		SOVERSION ${IOT_SDK_VERSION_MAJOR}
+	)
+    set(install_staticlibs
+        serializer_dll ${install_staticlibs}
     )
 endif()
+
+add_library(serializer STATIC $<TARGET_OBJECTS:serializer_obj>)
+
+set(install_staticlibs
+	serializer ${install_staticlibs}
+)
 
 if (NOT ${skip_samples})
 if(WIN32)
@@ -116,9 +127,6 @@ if(${use_installed_dependencies})
     )
     install(FILES ${serializer_h_files} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot)
 else()
-    set(install_staticlibs
-        serializer
-    )
     install(FILES ${serializer_h_files}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot) 
     install(TARGETS ${install_staticlibs} 
